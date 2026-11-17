@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit Test Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Schibsted+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: slim left rail + one content column of cards; orange reserved for actions and highlights */
+  --bg:#F1F1EF; --surface:#FFFFFF; --sunk:#F7F7F5; --ink:#1D2023; --muted:#62676E; --line:#E1E0DC;
+  --accent:#C9571A; --accent-on:#FFFFFF; --accent-soft:#FCEADD; --accent-ink:#8F3C0F;
+  --hi:#A8453D; --hi-soft:#F5E3E0; --med:#8A6D1F; --med-soft:#F2EBD6; --lo:#4F7363; --lo-soft:#E1ECE6;
+  --f-display:'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --f-body:'Public Sans', 'Segoe UI', system-ui, sans-serif;
+  --f-mono:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --r:14px; --shadow:0 1px 2px rgba(20,22,25,.04), 0 1px 0 rgba(20,22,25,.02);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141517; --surface:#1D1F22; --sunk:#18191C; --ink:#ECEBE8; --muted:#A0A4AA; --line:#2E3034;
+    --accent:#F08A4B; --accent-on:#1A120C; --accent-soft:#3A2618; --accent-ink:#F7B58C;
+    --hi:#E08A80; --hi-soft:#3A2321; --med:#D9B866; --med-soft:#332C18; --lo:#8FBBA6; --lo-soft:#1E2E27;
+    --shadow:none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141517; --surface:#1D1F22; --sunk:#18191C; --ink:#ECEBE8; --muted:#A0A4AA; --line:#2E3034;
+  --accent:#F08A4B; --accent-on:#1A120C; --accent-soft:#3A2618; --accent-ink:#F7B58C;
+  --hi:#E08A80; --hi-soft:#3A2321; --med:#D9B866; --med-soft:#332C18; --lo:#8FBBA6; --lo-soft:#1E2E27;
+  --shadow:none; color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:400 17px/1.55 var(--f-body);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--f-display);font-weight:650;letter-spacing:-.01em;text-wrap:balance;margin:0}
+h1{font-size:30px;line-height:1.2} h2{font-size:21px} h3{font-size:18px}
+p{margin:0}
+a{color:var(--accent-ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--f-mono);font-size:.88em}
+.muted{color:var(--muted)}
+.small{font-size:15px}
+
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100%}
+.rail{position:sticky;top:0;height:100vh;padding:24px 16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:24px;background:var(--bg)}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:19px;padding:0 8px}
+.brand .mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:var(--accent-on)}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:10px;font-weight:500;color:var(--muted)}
+.nav button:hover{background:var(--surface);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);font-weight:650}
+.nav button:focus-visible{outline:2px solid var(--accent)}
+.nav .count{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rail-foot{margin-top:auto;font-size:14px;color:var(--muted);padding:0 8px;display:flex;flex-direction:column;gap:6px}
+
+main{padding:28px clamp(16px,3vw,40px) 64px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.top .sub{color:var(--muted);margin-top:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:550;font-size:16px;line-height:1.2;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--accent-ink);padding:6px 8px}
+.btn.ghost:hover{background:var(--accent-soft)}
+.btn.danger{color:var(--hi)}
+.btn.sm{padding:6px 12px;font-size:15px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+.stack{display:flex;flex-direction:column;gap:16px}
+.grid{display:grid;gap:16px}
+.g-tiles{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.g-2{grid-template-columns:1.4fr 1fr}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.tile .k{color:var(--muted);font-size:15px}
+.tile .v{font-family:var(--f-display);font-size:34px;font-weight:650;line-height:1.15;margin-top:6px;font-variant-numeric:tabular-nums}
+.tile .s{font-size:14px;color:var(--muted);margin-top:4px}
+.tile.accent{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+
+.banner{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--accent-soft);color:var(--accent-ink);border-radius:var(--r);padding:12px 18px;margin-bottom:18px;font-size:16px}
+.banner.warn{background:var(--hi-soft);color:var(--hi)}
+
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:14px;font-weight:600;background:var(--sunk);border:1px solid var(--line);white-space:nowrap}
+.chip.High{background:var(--hi-soft);color:var(--hi);border-color:transparent}
+.chip.Medium{background:var(--med-soft);color:var(--med);border-color:transparent}
+.chip.Low{background:var(--lo-soft);color:var(--lo);border-color:transparent}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.chip.pri{font-family:var(--f-mono);font-size:13px}
+.chip.P1{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ref{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center;padding:3px 10px;border-radius:8px;font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--surface)}
+.ref:hover,.ref:focus-visible{border-color:var(--accent);color:var(--accent-ink)}
+.ref .p{color:var(--muted);font-weight:500}
+.row-wrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* Issue cards */
+.issues{display:flex;flex-direction:column;gap:12px}
+.issue{position:relative;display:grid;grid-template-columns:48px 1fr auto;gap:6px 16px;align-items:start;padding:18px 22px 18px 18px;cursor:pointer;border-left-width:5px}
+.issue:hover{border-color:var(--muted)}
+.issue.High{border-left-color:var(--hi)} .issue.Medium{border-left-color:var(--med)} .issue.Low{border-left-color:var(--lo)}
+.issue .rank{font-family:var(--f-display);font-size:20px;font-weight:650;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:1px}
+.issue .t{font-size:18px;font-weight:620;line-height:1.35}
+.issue .amt{font-family:var(--f-display);font-size:21px;font-weight:650;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.issue .meta{grid-column:2/4;display:flex;flex-direction:column;gap:10px}
+.loc{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:15px;color:var(--muted)}
+.loc .path{color:var(--ink)}
+.cellref{font-family:var(--f-mono);font-size:13px;padding:2px 7px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.status{font-size:14px;color:var(--muted)}
+.issue.closed{opacity:.62}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.toolbar input[type=search]{flex:1 1 220px;min-width:180px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--muted)}
+.field>span{font-weight:550}
+input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:16px;color:var(--ink);min-width:0}
+textarea{min-height:92px;resize:vertical;width:100%}
+select{padding-right:28px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.form .full{grid-column:1/-1}
+
+/* Bars */
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar{display:grid;grid-template-columns:130px 1fr 44px;gap:12px;align-items:center;font-size:15px}
+.bar .track{height:10px;border-radius:6px;background:var(--sunk);overflow:hidden;display:flex}
+.bar .fill{height:100%;background:var(--muted)}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.fill.High{background:var(--hi)} .fill.Medium{background:var(--med)} .fill.Low{background:var(--lo)}
+.meter{position:relative;height:16px;border-radius:8px;background:var(--sunk);margin:30px 34px}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:var(--accent)}
+.meter .mk{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--ink);opacity:.55}
+.meter .mk span{position:absolute;top:-24px;left:50%;transform:translateX(-50%);font-size:13px;white-space:nowrap;color:var(--muted)}
+.meter .mk span.b{top:auto;bottom:-24px}
+
+.top5{display:flex;flex-direction:column}
+.top5 button{all:unset;cursor:pointer;display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:11px 4px;border-top:1px solid var(--line)}
+.top5 button:first-child{border-top:0}
+.top5 button:hover .tt{color:var(--accent-ink)}
+.top5 .tt{font-weight:560;line-height:1.35}
+
+/* Files */
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:28px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center;background:var(--surface)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .big{font-family:var(--f-display);font-size:20px;font-weight:650}
+.sheet-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(200px,1.4fr) 90px 90px auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.sheet-row:first-of-type{border-top:0}
+.mapping{grid-column:1/-1;background:var(--sunk);border-radius:12px;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.table-wrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table.grid-t{border-collapse:separate;border-spacing:0;font-size:15px;min-width:100%}
+.grid-t th,.grid-t td{padding:7px 12px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);white-space:nowrap;text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.grid-t thead th{position:sticky;top:0;background:var(--sunk);font-family:var(--f-mono);font-size:13px;color:var(--muted);font-weight:500;z-index:2}
+.grid-t td.rn{position:sticky;left:0;background:var(--sunk);font-family:var(--f-mono);font-size:13px;color:var(--muted);text-align:right;z-index:1}
+.grid-t td.n{text-align:right;font-variant-numeric:tabular-nums}
+.grid-t tr.hdr td{font-weight:650;background:var(--sunk)}
+.grid-t tr.flag td{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))}
+.grid-t tr.flag td.rn{color:var(--accent-ink);font-weight:700}
+.grid-t td.hit{background:var(--accent-soft)!important;box-shadow:inset 0 0 0 2px var(--accent);font-weight:650;color:var(--accent-ink);cursor:pointer}
+.grid-t tr.focus td{animation:pulse 1.8s ease-out 1}
+@keyframes pulse{0%{box-shadow:inset 0 0 0 999px rgba(201,87,26,.28)}100%{box-shadow:inset 0 0 0 999px rgba(201,87,26,0)}}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px}
+.sw.c{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.sw.r{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface));border:1px solid var(--line)}
+
+/* Standards */
+.std{display:flex;flex-direction:column;gap:6px}
+.std-h{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.std-h .code{font-family:var(--f-display);font-weight:700;font-size:19px}
+.std .note{font-size:14px;color:var(--muted);background:var(--sunk);border-radius:8px;padding:8px 12px;margin:4px 0}
+.line{display:grid;grid-template-columns:92px 1fr auto;gap:14px;padding:10px 12px;border-radius:10px;align-items:start;border-left:3px solid transparent}
+.line .para{font-family:var(--f-mono);font-size:14px;color:var(--muted);padding-top:2px}
+.line .uses{font-size:13px;color:var(--muted);white-space:nowrap}
+.line.hl{background:var(--accent-soft);border-left-color:var(--accent)}
+.line.hl .para{color:var(--accent-ink);font-weight:700}
+.std.dim .line:not(.hl){opacity:.55}
+.lib-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(15,16,18,.38);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(720px,100%);background:var(--bg);z-index:41;overflow:auto;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.drawer-h{position:sticky;top:0;background:var(--bg);padding:20px 24px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;align-items:flex-start;z-index:2}
+.drawer-b{padding:20px 24px 48px;display:flex;flex-direction:column;gap:16px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:8px 16px;font-size:16px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.x{all:unset;cursor:pointer;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:22px;color:var(--muted)}
+.x:hover{background:var(--surface);color:var(--ink)}
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:50;padding:16px}
+.modal .card{width:min(680px,100%);max-height:90vh;overflow:auto}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-size:15px;z-index:60;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:90vw}
+.dropveil{position:fixed;inset:12px;border:3px dashed var(--accent);border-radius:20px;background:color-mix(in srgb,var(--accent-soft) 85%,transparent);z-index:70;display:grid;place-items:center;font-family:var(--f-display);font-size:26px;font-weight:650;color:var(--accent-ink);pointer-events:none}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+.hidden{display:none!important}
+
+@media (max-width:980px){ .g-2,.lib-cols{grid-template-columns:1fr} }
+@media (max-width:760px){
+  body{font-size:16px}
+  .app{grid-template-columns:1fr}
+  .rail{position:sticky;top:0;height:auto;z-index:20;flex-direction:row;align-items:center;padding:10px 16px;gap:12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .brand span{display:none}
+  .nav{flex-direction:row}
+  .nav .count,.rail-foot{display:none}
+  h1{font-size:25px}
+  .issue{grid-template-columns:1fr auto;padding:16px}
+  .issue .rank{display:none}
+  .issue .meta{grid-column:1/-1}
+  .sheet-row{grid-template-columns:1fr 1fr}
+  .kv{grid-template-columns:1fr}
+  .bar{grid-template-columns:100px 1fr 36px}
+  .line{grid-template-columns:72px 1fr}
+  .line .uses{grid-column:2}
+}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span>Audit Test Tracker</span></div>
+    <nav class="nav" aria-label="Sections">
+      <button data-view="overview">Overview</button>
+      <button data-view="issues">Issues <span class="count" id="navIssues"></span></button>
+      <button data-view="files">Files <span class="count" id="navFiles"></span></button>
+      <button data-view="standards">Standards</button>
+      <button data-view="engagement">Engagement</button>
+    </nav>
+    <div class="rail-foot" id="railEng"></div>
+  </aside>
+  <main>
+    <header class="top">
+      <div><h1 id="viewTitle">Overview</h1><p class="sub" id="engLine"></p></div>
+      <div class="actions"><button class="btn" data-act="new-issue">Add issue</button><button class="btn primary" data-act="upload">Upload Excel</button></div>
+    </header>
+    <div id="banner"></div>
+    <div id="view"></div>
+  </main>
+</div>
+<div id="scrim" class="scrim hidden"></div>
+<aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="drawerTitle"></aside>
+<div id="modal" class="modal hidden"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<div id="dropveil" class="dropveil hidden">Drop to test these files</div>
+<input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+/* ===== Audit engine: pure functions (detection, tests, scoring, standards, sample) ===== */
+
+/* ---------- Standards library (paraphrased summaries, not the official text) ---------- */
+const REFS = {
+  'SSA 200': { group: 'SSA', title: 'Overall Objectives of the Independent Auditor', lines: [
+    ['15', 'Plan and perform the audit with professional scepticism, recognising that circumstances may exist that cause the financial statements to be materially misstated.'],
+    ['17', 'Obtain sufficient appropriate audit evidence to reduce audit risk to an acceptably low level.'] ] },
+  'SSA 230': { group: 'SSA', title: 'Audit Documentation', lines: [
+    ['8', 'Document the procedures performed, evidence obtained and conclusions reached so that an experienced auditor with no prior connection to the audit can understand them.'],
+    ['9', 'Record the identifying characteristics of the items tested, who performed the work and who reviewed it.'] ] },
+  'SSA 240': { group: 'SSA', title: 'The Auditor’s Responsibilities Relating to Fraud', note: 'Paragraph numbers follow the SSA 240 currently in force. SSA 240 (Revised), issued by ISCA in July 2026, applies to audits of periods beginning on or after 15 December 2026 and renumbers its requirements.', lines: [
+    ['26', 'Presume there are risks of fraud in revenue recognition and evaluate which types of revenue, transactions or assertions give rise to them.'],
+    ['31', 'Treat the risk of management override of controls as present in every entity and as a significant risk.'],
+    ['32(a)', 'Test the appropriateness of journal entries and other adjustments made in preparing the financial statements, including entries made at the end of the reporting period.'],
+    ['32(b)', 'Review accounting estimates for bias that could result in material misstatement due to fraud.'],
+    ['32(c)', 'Evaluate the business rationale of significant transactions that are outside the normal course of business or otherwise appear unusual.'],
+    ['A41–A44', 'Application material on journal entry testing: inappropriate entries often show traits such as round numbers, posting to unrelated or seldom-used accounts, posting by unexpected users, period-end timing, or little or no explanation.'] ] },
+  'SSA 265': { group: 'SSA', title: 'Communicating Deficiencies in Internal Control', lines: [
+    ['8', 'Determine whether deficiencies in internal control identified during the audit are, individually or together, significant deficiencies.'],
+    ['9', 'Communicate significant deficiencies in internal control in writing to those charged with governance on a timely basis.'] ] },
+  'SSA 315': { group: 'SSA', title: 'Identifying and Assessing the Risks of Material Misstatement (Revised 2021)', lines: [
+    ['28', 'Identify the risks of material misstatement and determine the relevant assertions for significant classes of transactions, account balances and disclosures.'],
+    ['31', 'Assess inherent risk by considering the likelihood and magnitude of misstatement and how inherent risk factors affect susceptibility to misstatement.'],
+    ['32', 'Determine whether any of the assessed risks of material misstatement are significant risks.'] ] },
+  'SSA 320': { group: 'SSA', title: 'Materiality in Planning and Performing an Audit', lines: [
+    ['10', 'Determine materiality for the financial statements as a whole when establishing the overall audit strategy.'],
+    ['11', 'Determine performance materiality to reduce to an appropriately low level the chance that uncorrected and undetected misstatements together exceed materiality.'],
+    ['12', 'Revise materiality if information comes to light during the audit that would have led to a different amount initially.'] ] },
+  'SSA 330': { group: 'SSA', title: 'The Auditor’s Responses to Assessed Risks', lines: [
+    ['6', 'Design and perform further audit procedures whose nature, timing and extent respond to the assessed risks at the assertion level.'],
+    ['18', 'Perform substantive procedures for each material class of transactions, account balance and disclosure, whatever the assessed risk.'],
+    ['20', 'Agree or reconcile the financial statements to the underlying accounting records, and examine material journal entries and other adjustments made in preparing them.'],
+    ['21', 'Where a risk is significant, perform substantive procedures that respond specifically to that risk.'] ] },
+  'SSA 450': { group: 'SSA', title: 'Evaluation of Misstatements Identified during the Audit', lines: [
+    ['5', 'Accumulate misstatements identified during the audit, other than those that are clearly trivial.'],
+    ['6', 'Consider whether the audit strategy and plan need revision when accumulated misstatements approach materiality.'],
+    ['8', 'Communicate accumulated misstatements to management on a timely basis and request that they be corrected.'],
+    ['11', 'Determine whether uncorrected misstatements are material, individually or in aggregate.'] ] },
+  'SSA 500': { group: 'SSA', title: 'Audit Evidence', lines: [
+    ['6', 'Design and perform audit procedures appropriate to obtaining sufficient appropriate audit evidence.'],
+    ['7', 'Consider the relevance and reliability of information to be used as audit evidence.'],
+    ['9', 'When using information produced by the entity, evaluate whether it is reliable enough for the purpose, including evidence about its accuracy and completeness.'],
+    ['11', 'Where evidence is inconsistent or its reliability is in doubt, decide what changes or additions to audit procedures are needed to resolve the matter.'] ] },
+  'SSA 501': { group: 'SSA', title: 'Audit Evidence – Specific Considerations for Selected Items', lines: [
+    ['4', 'Where inventory is material, attend the physical count and perform procedures over the final inventory records.'] ] },
+  'SSA 505': { group: 'SSA', title: 'External Confirmations', lines: [
+    ['7', 'When using external confirmation procedures, keep control over the requests, including selecting items and sending the requests.'] ] },
+  'SSA 520': { group: 'SSA', title: 'Analytical Procedures', lines: [
+    ['5', 'For substantive analytical procedures, assess suitability, evaluate the reliability of the data, develop an expectation and set an acceptable difference.'],
+    ['6', 'Perform analytical procedures near the end of the audit to help form an overall conclusion.'],
+    ['7', 'Investigate fluctuations or relationships that are inconsistent with other information or differ significantly from expected values.'] ] },
+  'SSA 530': { group: 'SSA', title: 'Audit Sampling', lines: [
+    ['6', 'When designing a sample, consider the purpose of the procedure and the characteristics of the population.'],
+    ['12', 'Investigate the nature and cause of any deviations or misstatements identified.'],
+    ['14', 'Project misstatements found in the sample to the population.'] ] },
+  'SSA 540': { group: 'SSA', title: 'Auditing Accounting Estimates and Related Disclosures (Revised)', lines: [
+    ['13', 'Understand how management makes accounting estimates as part of risk assessment.'],
+    ['18', 'Design and perform further audit procedures that respond to the assessed risks for accounting estimates.'],
+    ['32', 'Evaluate whether management’s judgements and decisions indicate possible management bias.'] ] },
+  'SSA 550': { group: 'SSA', title: 'Related Parties', lines: [
+    ['15', 'Stay alert, when inspecting records or documents, for arrangements or information that may indicate related party relationships or transactions not previously identified.'],
+    ['22', 'If previously unidentified related parties or significant related party transactions are found, inform the team, ask management to identify all such transactions, and reassess risk.'],
+    ['23', 'For significant related party transactions outside the normal course of business, inspect the underlying contracts and obtain evidence that they were authorised and approved.'] ] },
+  'SSA 560': { group: 'SSA', title: 'Subsequent Events', lines: [
+    ['6', 'Perform procedures to obtain evidence that all events up to the date of the auditor’s report that need adjustment or disclosure have been identified.'] ] },
+  'SFRS(I) 1-1': { group: 'SFRS(I)', title: 'Presentation of Financial Statements', note: 'Superseded by SFRS(I) 18 for annual periods beginning on or after 1 January 2027.', lines: [
+    ['7', 'Information is material if omitting, misstating or obscuring it could reasonably be expected to influence the decisions of primary users.'],
+    ['29', 'Present each material class of similar items separately.'],
+    ['32', 'Do not offset assets and liabilities, or income and expenses, unless a standard requires or permits it.'] ] },
+  'SFRS(I) 18': { group: 'SFRS(I)', title: 'Presentation and Disclosure in Financial Statements', note: 'Issued by the ASC in October 2024; replaces SFRS(I) 1-1 for annual periods beginning on or after 1 January 2027, applied retrospectively.', lines: [
+    ['Overview', 'Introduces defined categories and required subtotals in profit or loss, disclosure of management-defined performance measures, and stronger guidance on aggregation and disaggregation.'] ] },
+  'SFRS(I) 1-2': { group: 'SFRS(I)', title: 'Inventories', lines: [
+    ['9', 'Measure inventories at the lower of cost and net realisable value.'],
+    ['28', 'Write inventories down to net realisable value when they are damaged, obsolete or their selling prices have fallen.'],
+    ['34', 'Recognise any write-down to net realisable value as an expense in the period it occurs.'] ] },
+  'SFRS(I) 1-10': { group: 'SFRS(I)', title: 'Events after the Reporting Period', lines: [
+    ['8', 'Adjust the amounts recognised for adjusting events after the reporting period.'],
+    ['10', 'Do not adjust for non-adjusting events after the reporting period; disclose them where material.'] ] },
+  'SFRS(I) 1-24': { group: 'SFRS(I)', title: 'Related Party Disclosures', lines: [
+    ['9', 'Defines related parties, including persons with control, significant influence or key management roles, their close family, and entities in the same group.'],
+    ['18', 'Disclose the nature of the related party relationship and the transactions and outstanding balances, including amounts and terms.'] ] },
+  'SFRS(I) 1-32': { group: 'SFRS(I)', title: 'Financial Instruments: Presentation', lines: [
+    ['42', 'Offset a financial asset and liability only where there is a legally enforceable right of set-off and an intention to settle net or simultaneously.'] ] },
+  'SFRS(I) 9': { group: 'SFRS(I)', title: 'Financial Instruments', lines: [
+    ['5.5.1', 'Recognise a loss allowance for expected credit losses on financial assets measured at amortised cost, among others.'],
+    ['5.5.11', 'There is a rebuttable presumption that credit risk has increased significantly when contractual payments are more than 30 days past due.'],
+    ['5.5.15', 'For trade receivables without a significant financing component, always measure the loss allowance at lifetime expected credit losses (simplified approach).'],
+    ['B5.5.37', 'There is a rebuttable presumption that default occurs no later than when a financial asset is 90 days past due.'] ] },
+  'SFRS(I) 15': { group: 'SFRS(I)', title: 'Revenue from Contracts with Customers', lines: [
+    ['31', 'Recognise revenue when, or as, a performance obligation is satisfied by transferring control of a good or service to the customer.'],
+    ['38', 'Indicators of transfer of control at a point in time include a present right to payment, legal title, physical possession, risks and rewards of ownership, and customer acceptance.'] ] }
+};
+const REF_SOURCES = {
+  SSA: 'https://isca.org.sg/standards-guidance/audit-assurance/standards-and-guidance/singapore-standards-on-auditing-(ssas)',
+  'SFRS(I)': 'https://acra.gov.sg/accountancy/accounting-standards/pronouncements/singapore-financial-reporting-standards-(international)/2023-volume'
+};
+
+/* ---------- Test catalogue ---------- */
+const ALL = '*';
+const TESTS = {
+  footing: { name: 'Casting / footing error', cat: 'Accuracy', assert: 'Accuracy', w: 40, types: ALL,
+    ssa: [['SSA 500', '9'], ['SSA 330', '20'], ['SSA 450', '5']], sfrs: [],
+    proc: 'Re-cast the listing, agree the corrected total to the general ledger and trial balance, and ask the preparer to explain the difference. Treat the listing as unreliable until it reconciles.' },
+  tb: { name: 'Trial balance does not balance', cat: 'Accuracy', assert: 'Accuracy', w: 58, types: ['tb'],
+    ssa: [['SSA 330', '20'], ['SSA 500', '9'], ['SSA 450', '5']], sfrs: [],
+    proc: 'Obtain a fresh trial balance extract, identify the out-of-balance account and agree each balance to the general ledger before using it for the financial statements.' },
+  dup: { name: 'Possible duplicate entry', cat: 'Occurrence', assert: 'Occurrence', w: 26, types: ALL,
+    ssa: [['SSA 240', '32(a)'], ['SSA 500', '6']], sfrs: [],
+    proc: 'Vouch both entries to source documents. If only one transaction exists, propose reversal of the duplicate and check whether the control over duplicate postings failed.' },
+  round: { name: 'Round-sum amount', cat: 'Fraud risk', assert: 'Occurrence', w: 20, types: ['gl', 'rev', 'bank', 'ap'],
+    ssa: [['SSA 240', '32(a)'], ['SSA 240', 'A41–A44']], sfrs: [],
+    proc: 'Vouch to supporting documents and approval. Check who posted the entry and whether the business rationale is documented.' },
+  weekend: { name: 'Posted on a weekend', cat: 'Fraud risk', assert: 'Occurrence', w: 18, types: ['gl', 'rev', 'bank'],
+    ssa: [['SSA 240', '32(a)'], ['SSA 240', 'A41–A44'], ['SSA 330', '20']], sfrs: [],
+    proc: 'Confirm who posted the entry and why it was posted outside working days. Check approval and system access records.' },
+  postperiod: { name: 'Dated after period end (cut-off)', cat: 'Cut-off', assert: 'Cut-off', w: 30, types: ['gl', 'rev', 'bank', 'ap', 'ar'],
+    ssa: [['SSA 330', '6'], ['SSA 560', '6'], ['SSA 500', '6']], sfrs: [['SFRS(I) 15', '31'], ['SFRS(I) 1-10', '8']],
+    proc: 'Inspect delivery and shipping documents to find the period in which control transferred. Record it in the correct period, or assess it as an adjusting or non-adjusting event.' },
+  yearend: { name: 'Large entry in final days of the year', cat: 'Cut-off', assert: 'Cut-off', w: 26, types: ['gl', 'rev', 'bank'],
+    ssa: [['SSA 240', '32(a)'], ['SSA 330', '20']], sfrs: [['SFRS(I) 15', '38']],
+    proc: 'Vouch to supporting evidence and check whether the entry reverses after period end, which can indicate manipulation of results.' },
+  keyitem: { name: 'Above performance materiality', cat: 'Key items', assert: 'Existence / Occurrence', w: 8, types: ['gl', 'rev', 'bank', 'ap', 'ar', 'inv', 'ppe', 'other'],
+    ssa: [['SSA 320', '11'], ['SSA 330', '18'], ['SSA 530', '6']], sfrs: [],
+    proc: 'Test 100% as an individually significant item: vouch to source documents, contracts and bank evidence.' },
+  outlier: { name: 'Statistical outlier', cat: 'Analytical', assert: 'Accuracy / Valuation', w: 18, types: ['gl', 'rev', 'bank', 'ap', 'ar', 'inv', 'ppe', 'other'],
+    ssa: [['SSA 520', '7'], ['SSA 315', '31']], sfrs: [],
+    proc: 'Get an explanation from management and corroborate it with evidence. Check for keying errors such as an extra digit.' },
+  missing: { name: 'Missing key data', cat: 'Completeness', assert: 'Completeness / Accuracy', w: 16, types: ALL,
+    ssa: [['SSA 500', '9'], ['SSA 265', '8']], sfrs: [],
+    proc: 'Ask the preparer to complete the record. Evaluate whether the report extraction is complete and whether this points to a control deficiency.' },
+  negative: { name: 'Unexpected negative balance', cat: 'Presentation', assert: 'Classification / Presentation', w: 22, types: ['ar', 'inv', 'ppe'],
+    ssa: [['SSA 500', '11'], ['SSA 315', '28']], sfrs: { ar: [['SFRS(I) 1-1', '32'], ['SFRS(I) 1-32', '42']], inv: [['SFRS(I) 1-2', '9']], ppe: [['SFRS(I) 1-1', '29']] },
+    proc: 'Investigate the cause (unapplied receipts, over-issues, keying error). Reclassify credit balances to payables where offsetting is not permitted.' },
+  gaps: { name: 'Gap in document sequence', cat: 'Completeness', assert: 'Completeness', w: 36, types: ['gl', 'rev', 'bank', 'ap'],
+    ssa: [['SSA 500', '6'], ['SSA 265', '8']], sfrs: [],
+    proc: 'Obtain the missing document numbers and check whether they were cancelled with authorisation or omitted from the records.' },
+  aging: { name: 'Overdue receivable – credit loss risk', cat: 'Valuation', assert: 'Valuation', w: 24, types: ['ar'],
+    ssa: [['SSA 540', '18'], ['SSA 540', '32']], sfrs: [['SFRS(I) 9', '5.5.1'], ['SFRS(I) 9', '5.5.15'], ['SFRS(I) 9', 'B5.5.37']],
+    proc: 'Review receipts after year end and customer correspondence. Assess whether the expected credit loss allowance covers this balance under the simplified approach.' },
+  rpt: { name: 'Possible related party transaction', cat: 'Related parties', assert: 'Occurrence / Disclosure', w: 30, types: ALL,
+    ssa: [['SSA 550', '15'], ['SSA 550', '22']], sfrs: [['SFRS(I) 1-24', '9'], ['SFRS(I) 1-24', '18']],
+    proc: 'Confirm whether the counterparty is a related party, check board approval and terms, and make sure it is disclosed in the related party note.' },
+  unusual: { name: 'Unusual description (manual / adjustment)', cat: 'Fraud risk', assert: 'Occurrence', w: 28, types: ['gl', 'bank'],
+    ssa: [['SSA 240', '31'], ['SSA 240', '32(a)'], ['SSA 240', 'A41–A44']], sfrs: [],
+    proc: 'Obtain support and the approver. Corroborate the business rationale with someone other than the preparer.' },
+  nrv: { name: 'Net realisable value below cost', cat: 'Valuation', assert: 'Valuation', w: 24, types: ['inv'],
+    ssa: [['SSA 540', '18'], ['SSA 501', '4']], sfrs: [['SFRS(I) 1-2', '9'], ['SFRS(I) 1-2', '28'], ['SFRS(I) 1-2', '34']],
+    proc: 'Verify NRV to selling prices after year end and propose a write-down for the amount by which cost exceeds NRV.' },
+  benford: { name: 'First-digit distribution (Benford) anomaly', cat: 'Fraud risk', assert: 'Occurrence', w: 30, types: ['gl', 'rev', 'bank', 'ap'],
+    ssa: [['SSA 240', '32(a)'], ['SSA 520', '7']], sfrs: [],
+    proc: 'Drill into entries that start with the over-represented digit and look for amounts just below approval limits.' }
+};
+const CATS = ['Fraud risk', 'Related parties', 'Cut-off', 'Valuation', 'Occurrence', 'Accuracy', 'Completeness', 'Presentation', 'Analytical', 'Key items', 'Other'];
+const SHEET_TYPES = { gl: 'General ledger / journals', tb: 'Trial balance', rev: 'Sales / revenue listing', ar: 'Trade receivables ageing', ap: 'Trade payables', inv: 'Inventory listing', ppe: 'Fixed assets / PPE', bank: 'Bank / cash', other: 'Other' };
+
+/* ---------- Value helpers ---------- */
+function num(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).trim();
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (/-$/.test(s)) { neg = true; s = s.slice(0, -1); }
+  s = s.replace(/(SGD|USD|S\$|\$|,|\s)/gi, '');
+  if (!/^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s)) return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : (neg ? -n : n);
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+function ymd(y, m, d) {
+  y = +y; m = +m; d = +d;
+  if (y < 100) y += 2000;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return y + '-' + pad(m) + '-' + pad(d);
+}
+function toDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') {
+    if (v > 20000 && v < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5); return ymd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()); }
+    return null;
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return ymd(m[1], m[2], m[3]);
+  m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/); // Singapore convention: day/month/year
+  if (m) return ymd(m[3], m[2], m[1]);
+  const t = Date.parse(s);
+  if (!isNaN(t) && /[a-z]{3}/i.test(s)) { const d = new Date(t); return ymd(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
+  return null;
+}
+function dow(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }
+function daysBetween(a, b) { const p = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); }; return Math.round((p(b) - p(a)) / 864e5); }
+function colName(c) { let s = ''; c++; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; }
+function str(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+function isTotalRow(row) { return row.some(v => typeof v === 'string' && /\b(grand\s+)?(sub-?\s?)?totals?\b/i.test(v)); }
+
+/* ---------- Detection ---------- */
+const HDR_RULES = [
+  ['due', [/due\s*date/i, /^due$/i]],
+  ['days', [/days?\s*(past\s*)?(due|overdue|outstanding)/i, /^(age|ageing|aging)(\s*\(?days\)?)?$/i, /overdue/i, /^days$/i, /\bdpd\b/i]],
+  ['nrv', [/\bnrv\b/i, /net\s*reali[sz]able/i, /selling\s*price/i]],
+  ['qty', [/^qty|quantity|units?\s*on\s*hand|^units$/i]],
+  ['cost', [/unit\s*cost/i, /^cost(\s*per\s*unit)?$/i]],
+  ['debit', [/^debit|^dr\b|\bdebit\b/i]],
+  ['credit', [/^credit|^cr\b|\bcredit\b/i]],
+  ['account', [/account\s*(code|no|number|#)/i, /^(gl\s*)?account$/i, /^a\/c/i, /gl\s*code/i]],
+  ['ref', [/je\s*no|journal\s*(no|number|#|id)|entry\s*no|voucher/i, /invoice\s*(no|number|#)|inv\s*no/i, /doc(ument)?\s*(no|number|#)/i, /^ref|reference/i, /item\s*code|sku/i]],
+  ['date', [/posting\s*date|post\s*date/i, /(transaction|txn|entry|document|doc|invoice)\s*date/i, /^date$/i, /date/i]],
+  ['amount', [/^amount|\bamount\b/i, /balance/i, /total\s*value|\bvalue\b/i, /\bnet\b/i, /\b(sgd|usd)\b/i, /total/i]],
+  ['desc', [/description|narration|memo|particulars|details/i, /customer|vendor|supplier|payee/i, /account\s*name/i, /item|name/i]],
+  ['user', [/posted\s*by|created\s*by|prepared\s*by|^user/i]]
+];
+const MAP_KEYS = ['date', 'amount', 'debit', 'credit', 'desc', 'ref', 'account', 'days', 'due', 'qty', 'cost', 'nrv', 'user'];
+const MAP_LABEL = { date: 'Date', amount: 'Amount / balance', debit: 'Debit', credit: 'Credit', desc: 'Description / name', ref: 'Document / JE no.', account: 'Account', days: 'Days past due', due: 'Due date', qty: 'Quantity', cost: 'Unit cost', nrv: 'NRV per unit', user: 'Posted by' };
+
+function detectHeaderRow(rows) {
+  let best = 0, bestScore = -1;
+  const lim = Math.min(rows.length, 15);
+  for (let r = 0; r < lim; r++) {
+    const row = rows[r] || [];
+    let strs = 0, hits = 0, nonEmpty = 0;
+    row.forEach(v => {
+      if (v === null || v === '') return;
+      nonEmpty++;
+      if (typeof v === 'string' && num(v) === null && !toDate(v)) {
+        strs++;
+        if (HDR_RULES.some(([, rs]) => rs.some(re => re.test(v)))) hits++;
+      }
+    });
+    if (nonEmpty < 2) continue;
+    const score = hits * 3 + strs;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return best;
+}
+function detectMap(headers) {
+  const map = {}; const used = new Set();
+  const H = headers.map(str);
+  HDR_RULES.forEach(([key, regs]) => {
+    for (const re of regs) {
+      const idx = H.findIndex((h, i) => h && !used.has(i) && re.test(h));
+      if (idx >= 0) { map[key] = idx; used.add(idx); break; }
+    }
+  });
+  MAP_KEYS.forEach(k => { if (!(k in map)) map[k] = null; });
+  return map;
+}
+function detectType(name, headers, map) {
+  const t = (name + ' ' + headers.map(str).join(' ')).toLowerCase();
+  if (/trial\s*balance|\btb\b/.test(t)) return 'tb';
+  if (/receivable|ageing|aging|debtor/.test(t)) return 'ar';
+  if (/payable|creditor/.test(t)) return 'ap';
+  if (/inventor|stock|\bsku\b/.test(t) || (map.qty !== null && map.cost !== null)) return 'inv';
+  if (/fixed\s*asset|\bppe\b|property,? plant/.test(t)) return 'ppe';
+  if (/bank|cash\s*book/.test(t)) return 'bank';
+  if (/sales|revenue|invoice\s*listing/.test(t)) return 'rev';
+  if (/ledger|journal|\bgl\b|\bje\b/.test(t)) return 'gl';
+  return 'gl';
+}
+function prepareSheet(raw) {
+  const rows = raw.rows;
+  const headerRow = detectHeaderRow(rows);
+  const headers = rows[headerRow] || [];
+  const map = detectMap(headers);
+  return { name: raw.name, rows, originR: raw.originR || 0, originC: raw.originC || 0, headerRow, map, type: detectType(raw.name, headers, map), tested: false };
+}
+
+/* ---------- Row model ---------- */
+function rowAmount(row, map) {
+  if (map.amount !== null && map.amount !== undefined) { const a = num(row[map.amount]); if (a !== null) return a; }
+  const d = map.debit !== null ? num(row[map.debit]) : null, c = map.credit !== null ? num(row[map.credit]) : null;
+  if (d !== null || c !== null) return (d || 0) - (c || 0);
+  if (map.qty !== null && map.cost !== null) { const q = num(row[map.qty]), u = num(row[map.cost]); if (q !== null && u !== null) return q * u; }
+  return null;
+}
+function amountCol(row, map) {
+  if (map.amount !== null && num(row[map.amount]) !== null) return map.amount;
+  if (map.debit !== null && num(row[map.debit])) return map.debit;
+  if (map.credit !== null && num(row[map.credit])) return map.credit;
+  return map.amount ?? map.debit ?? map.credit ?? 0;
+}
+function dataRows(sh) {
+  const out = [];
+  for (let r = sh.headerRow + 1; r < sh.rows.length; r++) {
+    const row = sh.rows[r] || [];
+    if (!row.some(v => v !== null && v !== '')) continue;
+    out.push({ r, row, total: isTotalRow(row), amount: rowAmount(row, sh.map) });
+  }
+  return out;
+}
+
+/* ---------- Tests ---------- */
+function analyse(sh, eng, disabled) {
+  disabled = disabled || [];
+  const M = +eng.materiality || 0, PM = M * (+eng.pmPct || 75) / 100;
+  const pe = eng.periodEnd || null;
+  const map = sh.map, type = sh.type;
+  const rows = dataRows(sh);
+  const pop = rows.filter(x => !x.total);
+  const hdr = sh.rows[sh.headerRow] || [];
+  const F = [];
+  const on = id => !disabled.includes(id) && (TESTS[id].types === ALL || TESTS[id].types.includes(type));
+  const add = (test, o) => F.push(Object.assign({ test, rows: [], cells: [], amount: 0, title: TESTS[test].name, detail: '' }, o));
+  const fmt = n => (n < 0 ? '(' : '') + Math.abs(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (n < 0 ? ')' : '');
+  const descOf = x => map.desc !== null ? str(x.row[map.desc]) : '';
+  const refOf = x => map.ref !== null ? str(x.row[map.ref]) : '';
+  const label = x => [refOf(x), descOf(x)].filter(Boolean).join(' – ') || ('row ' + (x.r + sh.originR + 1));
+  const CAP = 60;
+  const capped = (test, list, fn) => { list.slice(0, CAP).forEach(fn); if (list.length > CAP) add(test, { title: TESTS[test].name + ' – ' + (list.length - CAP) + ' more items', detail: 'Only the first ' + CAP + ' items were logged individually. Consider filtering the population or raising the threshold.', rows: list.slice(CAP).map(x => x.r) }); };
+
+  // 1. Footing of total rows
+  if (on('footing')) {
+    const cols = [map.amount, map.debit, map.credit, map.qty].filter(c => c !== null && c !== undefined);
+    let start = 0;
+    rows.forEach((x, i) => {
+      if (!x.total) return;
+      const seg = rows.slice(start, i).filter(y => !y.total);
+      cols.forEach(c => {
+        const reported = num(x.row[c]);
+        if (reported === null || !seg.length) return;
+        const sum = seg.reduce((s, y) => s + (num(y.row[c]) || 0), 0);
+        const diff = Math.round((reported - sum) * 100) / 100;
+        if (Math.abs(diff) > 0.5) add('footing', { rows: [x.r], cells: [[x.r, c]], amount: diff, misType: 'Factual', adj: -diff,
+          title: 'Total does not cast – ' + (str(hdr[c]) || colName(c)),
+          detail: 'The total row shows ' + fmt(reported) + ' but the ' + seg.length + ' rows above add up to ' + fmt(sum) + '. Difference: ' + fmt(diff) + '.' });
+      });
+      start = i + 1;
+    });
+  }
+  // 2. Trial balance in balance
+  if (on('tb') && map.debit !== null && map.credit !== null) {
+    const d = pop.reduce((s, x) => s + (num(x.row[map.debit]) || 0), 0), c = pop.reduce((s, x) => s + (num(x.row[map.credit]) || 0), 0);
+    const diff = Math.round((d - c) * 100) / 100;
+    if (Math.abs(diff) > 0.5) {
+      const tot = rows.find(x => x.total);
+      add('tb', { rows: tot ? [tot.r] : [], cells: tot ? [[tot.r, map.debit], [tot.r, map.credit]] : [], amount: diff, misType: 'Factual', adj: -diff,
+        detail: 'Total debits ' + fmt(d) + ' vs total credits ' + fmt(c) + '. The trial balance is out by ' + fmt(diff) + '.' });
+    }
+  }
+  // 3. Duplicates
+  if (on('dup')) {
+    const groups = {};
+    pop.forEach(x => {
+      if (!x.amount) return;
+      const key = [refOf(x).toLowerCase(), map.date !== null ? toDate(x.row[map.date]) : '', x.amount.toFixed(2), descOf(x).toLowerCase(), map.account !== null ? str(x.row[map.account]) : ''].join('|');
+      (groups[key] = groups[key] || []).push(x);
+    });
+    const dups = Object.values(groups).filter(g => g.length > 1);
+    capped('dup', dups.map(g => ({ r: g[0].r, g })), ({ g }) => add('dup', { rows: g.map(y => y.r), cells: g.map(y => [y.r, amountCol(y.row, map)]), amount: g[0].amount * (g.length - 1),
+      title: 'Possible duplicate – ' + label(g[0]),
+      detail: g.length + ' rows share the same reference, date, amount and description (' + fmt(g[0].amount) + ' each). Excel rows: ' + g.map(y => y.r + sh.originR + 1).join(', ') + '.' }));
+  }
+  // 4. Round sums
+  if (on('round')) capped('round', pop.filter(x => x.amount && Math.abs(x.amount) >= 10000 && Math.abs(x.amount) % 1000 === 0), x => add('round', { rows: [x.r], cells: [[x.r, amountCol(x.row, map)]], amount: x.amount,
+    title: 'Round-sum amount – ' + label(x), detail: 'Amount of ' + fmt(x.amount) + ' is an exact multiple of 1,000. Round amounts are a common trait of estimates and manual or fraudulent entries.' }));
+  // 5. Weekend postings
+  if (on('weekend') && map.date !== null) capped('weekend', pop.filter(x => { const d = toDate(x.row[map.date]); return d && (dow(d) === 0 || dow(d) === 6); }), x => {
+    const d = toDate(x.row[map.date]);
+    add('weekend', { rows: [x.r], cells: [[x.r, map.date]], amount: x.amount || 0, title: 'Weekend posting – ' + label(x), detail: 'Posted on ' + (dow(d) === 0 ? 'Sunday' : 'Saturday') + ' ' + d + (map.user !== null && str(x.row[map.user]) ? ' by ' + str(x.row[map.user]) : '') + '.' });
+  });
+  // 6. Cut-off
+  if (pe && map.date !== null) {
+    if (on('postperiod')) capped('postperiod', pop.filter(x => { const d = toDate(x.row[map.date]); return d && d > pe; }), x => {
+      const d = toDate(x.row[map.date]);
+      add('postperiod', { rows: [x.r], cells: [[x.r, map.date]], amount: x.amount || 0, title: 'Dated after year end – ' + label(x), detail: 'Dated ' + d + ', which is ' + daysBetween(pe, d) + ' day(s) after the period end of ' + pe + ', but included in this listing.' });
+    });
+    if (on('yearend') && PM > 0) capped('yearend', pop.filter(x => { const d = toDate(x.row[map.date]); return d && d <= pe && daysBetween(d, pe) <= 5 && Math.abs(x.amount || 0) >= PM; }), x => {
+      const d = toDate(x.row[map.date]);
+      add('yearend', { rows: [x.r], cells: [[x.r, map.date], [x.r, amountCol(x.row, map)]], amount: x.amount, title: 'Large year-end entry – ' + label(x), detail: fmt(x.amount) + ' posted on ' + d + ', within 5 days of period end, and above performance materiality.' });
+    });
+  }
+  // 7. Key items
+  if (on('keyitem') && PM > 0) capped('keyitem', pop.filter(x => Math.abs(x.amount || 0) >= PM), x => add('keyitem', { rows: [x.r], cells: [[x.r, amountCol(x.row, map)]], amount: x.amount,
+    title: 'Key item – ' + label(x), detail: fmt(x.amount) + ' is at or above performance materiality of ' + fmt(PM) + ' and should be tested individually.' }));
+  // 8. Outliers (robust z-score on log amounts)
+  if (on('outlier')) {
+    const vals = pop.filter(x => x.amount && Math.abs(x.amount) >= 1);
+    if (vals.length >= 20) {
+      const L = vals.map(x => Math.log10(Math.abs(x.amount)));
+      const med = a => { const s = [...a].sort((p, q) => p - q); const h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+      const m = med(L), mad = med(L.map(v => Math.abs(v - m))) || 0.0001;
+      capped('outlier', vals.filter((x, i) => 0.6745 * (L[i] - m) / mad > 3.5), x => add('outlier', { rows: [x.r], cells: [[x.r, amountCol(x.row, map)]], amount: x.amount,
+        title: 'Outlier – ' + label(x), detail: fmt(x.amount) + ' is far above the typical item in this population (median about ' + fmt(Math.pow(10, m)) + ').' }));
+    }
+  }
+  // 9. Missing data
+  if (on('missing')) {
+    const need = ['date', 'ref', 'desc'].filter(k => map[k] !== null && map[k] !== undefined);
+    capped('missing', pop.filter(x => x.amount && need.some(k => !str(x.row[map[k]]))), x => {
+      const miss = need.filter(k => !str(x.row[map[k]]));
+      add('missing', { rows: [x.r], cells: miss.map(k => [x.r, map[k]]), amount: x.amount, title: 'Missing ' + miss.map(k => MAP_LABEL[k].toLowerCase()).join(' and ') + ' – ' + label(x),
+        detail: 'This row carries ' + fmt(x.amount) + ' but has no ' + miss.map(k => MAP_LABEL[k].toLowerCase()).join(' or ') + '.' });
+    });
+  }
+  // 10. Negative balances
+  if (on('negative')) capped('negative', pop.filter(x => (x.amount !== null && x.amount < 0) || (map.qty !== null && (num(x.row[map.qty]) || 0) < 0)), x => {
+    const c = map.qty !== null && (num(x.row[map.qty]) || 0) < 0 ? map.qty : amountCol(x.row, map);
+    add('negative', { rows: [x.r], cells: [[x.r, c]], amount: x.amount || 0, title: (type === 'ar' ? 'Credit balance in receivables' : 'Negative balance') + ' – ' + label(x),
+      detail: type === 'ar' ? 'A credit balance of ' + fmt(x.amount) + ' sits within trade receivables. It may need to be reclassified to payables rather than offset.' : 'Negative ' + (str(hdr[c]) || 'value') + ' of ' + fmt(num(x.row[c])) + ', which should not occur for this type of balance.' });
+  });
+  // 11. Sequence gaps
+  if (on('gaps') && map.ref !== null) {
+    const seqs = {};
+    pop.forEach(x => { const m = refOf(x).match(/^(.*?)(\d+)$/); if (m) (seqs[m[1]] = seqs[m[1]] || []).push({ n: +m[2], x, w: m[2].length }); });
+    Object.entries(seqs).forEach(([pre, list]) => {
+      if (list.length < 10) return;
+      const s = [...new Map(list.map(o => [o.n, o])).values()].sort((a, b) => a.n - b.n);
+      for (let i = 1; i < s.length; i++) {
+        const gap = s[i].n - s[i - 1].n;
+        if (gap > 1 && gap <= 50) {
+          const from = pre + String(s[i - 1].n + 1).padStart(s[i].w, '0'), to = pre + String(s[i].n - 1).padStart(s[i].w, '0');
+          add('gaps', { rows: [s[i - 1].x.r, s[i].x.r], cells: [[s[i - 1].x.r, map.ref], [s[i].x.r, map.ref]], amount: 0, title: 'Missing ' + (gap === 2 ? from : from + ' to ' + to),
+            detail: (gap - 1) + ' number(s) missing between ' + refOf(s[i - 1].x) + ' and ' + refOf(s[i].x) + '.' });
+        }
+      }
+    });
+  }
+  // 12. Ageing
+  if (on('aging')) {
+    const ageOf = x => { if (map.days !== null) { const d = num(x.row[map.days]); if (d !== null) return d; } if (map.due !== null && pe) { const d = toDate(x.row[map.due]); if (d) return daysBetween(d, pe); } return null; };
+    capped('aging', pop.filter(x => (x.amount || 0) > 0 && (ageOf(x) || 0) > 90), x => {
+      const a = ageOf(x);
+      add('aging', { rows: [x.r], cells: [[x.r, map.days !== null ? map.days : map.due], [x.r, amountCol(x.row, map)]].filter(c => c[1] !== null), amount: x.amount, boost: a > 365 ? 20 : a > 180 ? 10 : 0,
+        title: Math.round(a) + ' days past due – ' + label(x), detail: fmt(x.amount) + ' is ' + Math.round(a) + ' days past due at period end, beyond the 90-day default presumption.' });
+    });
+  }
+  // 13. Related parties
+  if (on('rpt')) {
+    const re = /\b(directors?|shareholders?|related\s+part(y|ies)|rpt|key\s+management|chairman|inter-?company|holding\s+(co|company)|subsidiar(y|ies)|associate\s+company|family)\b/i;
+    capped('rpt', pop.filter(x => x.row.some(v => typeof v === 'string' && re.test(v))), x => {
+      const c = x.row.findIndex(v => typeof v === 'string' && re.test(v)); const kw = String(x.row[c]).match(re)[0];
+      add('rpt', { rows: [x.r], cells: [[x.r, c]], amount: x.amount || 0, title: 'Related party indicator – ' + label(x), detail: 'The text mentions “' + kw + '”. Check whether this is a related party transaction that needs approval and disclosure.' });
+    });
+  }
+  // 14. Unusual descriptions
+  if (on('unusual') && map.desc !== null) {
+    const re = /\b(adjust(ment)?s?|manual|plug|suspense|misc(ellaneous)?|reversal|override|write[- ]?offs?|correction|top[- ]?side|per\s+(cfo|ceo|md|director|management))\b/i;
+    capped('unusual', pop.filter(x => re.test(descOf(x))), x => add('unusual', { rows: [x.r], cells: [[x.r, map.desc]], amount: x.amount || 0, title: 'Unusual entry – ' + label(x),
+      detail: 'The description contains “' + descOf(x).match(re)[0] + '”, a keyword typical of manual or top-side adjustments.' }));
+  }
+  // 15. NRV below cost
+  if (on('nrv') && map.nrv !== null && map.cost !== null) capped('nrv', pop.filter(x => { const n = num(x.row[map.nrv]), c = num(x.row[map.cost]); return n !== null && c !== null && n < c; }), x => {
+    const n = num(x.row[map.nrv]), c = num(x.row[map.cost]), q = map.qty !== null ? (num(x.row[map.qty]) || 0) : 1;
+    const wd = Math.round(Math.max(q, 0) * (c - n) * 100) / 100;
+    add('nrv', { rows: [x.r], cells: [[x.r, map.cost], [x.r, map.nrv]], amount: -wd, misType: 'Judgemental', adj: -wd, title: 'NRV below cost – ' + label(x),
+      detail: 'Unit cost ' + fmt(c) + ' exceeds NRV ' + fmt(n) + '. Estimated write-down: ' + fmt(wd) + (map.qty !== null ? ' on ' + q + ' units.' : ' per unit.') });
+  });
+  // 16. Benford first digit
+  if (on('benford')) {
+    const v = pop.map(x => Math.abs(x.amount || 0)).filter(a => a >= 10);
+    if (v.length >= 200) {
+      const obs = Array(10).fill(0); v.forEach(a => obs[+String(a).replace(/^0\.?0*/, '')[0]]++);
+      let chi = 0, worst = 1, worstEx = 0;
+      for (let d = 1; d <= 9; d++) { const e = v.length * Math.log10(1 + 1 / d); chi += (obs[d] - e) ** 2 / e; const ex = (obs[d] - e) / e; if (ex > worstEx) { worstEx = ex; worst = d; } }
+      if (chi > 20.09) add('benford', { population: true, amount: 0, title: 'First digits deviate from Benford’s law', detail: 'Chi-square ' + chi.toFixed(1) + ' on ' + v.length + ' amounts (1% critical value 20.09). Digit ' + worst + ' appears ' + Math.round(worstEx * 100) + '% more often than expected.' });
+    }
+  }
+  return F.map(f => {
+    const t = TESTS[f.test];
+    const sfrs = Array.isArray(t.sfrs) ? t.sfrs : (t.sfrs[type] || []);
+    return Object.assign(f, { category: t.cat, assertion: t.assert, ssa: t.ssa.map(a => a.slice()), sfrs: sfrs.map(a => a.slice()) });
+  });
+}
+
+/* ---------- Risk scoring ---------- */
+const FRAUDISH = ['unusual', 'rpt', 'round', 'yearend', 'tb', 'benford'];
+function scoreIssue(iss, eng) {
+  const M = +eng.materiality || 0, PM = M * (+eng.pmPct || 75) / 100, CT = M * (+eng.trivialPct || 5) / 100;
+  const a = Math.abs(+iss.amount || 0);
+  let mag;
+  if (iss.population) mag = 20;
+  else if (M > 0) mag = a >= M ? 45 : a >= PM ? 35 : a >= 0.25 * M ? 25 : a >= CT ? 12 : 0;
+  else mag = a > 0 ? 12 : 0;
+  const w = TESTS[iss.test] ? TESTS[iss.test].w : 24;
+  const score = Math.min(100, mag + w + (iss.boost || 0));
+  const risk = score >= 55 ? 'High' : score >= 35 ? 'Medium' : 'Low';
+  let priority;
+  if (risk === 'High') priority = (PM > 0 && a >= PM) || FRAUDISH.includes(iss.test) ? 'P1' : 'P2';
+  else if (risk === 'Medium') priority = PM > 0 && a >= PM ? 'P2' : 'P3';
+  else priority = 'P4';
+  return { score, risk, priority };
+}
+
+/* ---------- Sample workbook (clearly marked example data) ---------- */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function buildSample() {
+  const rnd = mulberry32(20260630);
+  const r2 = v => Math.round(v * 100) / 100;
+  const amt = (lo, hi) => { let v = r2(Math.exp(Math.log(lo) + rnd() * (Math.log(hi) - Math.log(lo)))); if (v % 1000 === 0) v += 13.45; return v; };
+  const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, d + n)); return ymd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()); };
+  // weekday dates spread across FY 1 Jul 2025 - 26 Jun 2026
+  const days = []; for (let i = 0; i < 361; i++) { const d = addDays('2025-07-01', i); if (dow(d) !== 0 && dow(d) !== 6) days.push(d); }
+  const acc = [
+    ['4000', 'Revenue', 'credit', ['Sales invoice', 'Sales invoice', 'Service revenue']],
+    ['5000', 'Cost of sales', 'debit', ['Purchase of components', 'Freight inward', 'Subcontract machining']],
+    ['6100', 'Salaries', 'debit', ['Monthly payroll', 'CPF contribution']],
+    ['6200', 'Rent', 'debit', ['Factory rent - Tuas', 'Office rent - Ubi']],
+    ['6300', 'Utilities', 'debit', ['SP Group electricity', 'Water charges']],
+    ['6400', 'Professional fees', 'debit', ['Tax advisory fee', 'Legal fee - contract review']],
+    ['6500', 'Travel', 'debit', ['Travel - Batam supplier visit', 'Client entertainment']],
+    ['1000', 'Bank - DBS', 'debit', ['Customer receipt', 'Customer receipt']],
+    ['2000', 'Trade payables', 'credit', ['Supplier invoice', 'Supplier invoice']]
+  ];
+  const users = ['wong.l', 'siti.r', 'kumar.p', 'chen.j'];
+  const custs = ['Pacific Marine', 'Jurong Precision', 'Tampines Electronics', 'Kallang Engineering', 'Sentosa Hospitality', 'Changi Logistics'];
+  const N = 136; const gl = [];
+  let je = 1001;
+  for (let i = 0; i < N; i++) {
+    if (je === 1078) je = 1080; // planted sequence gap
+    const a = acc[Math.floor(rnd() * acc.length)];
+    let desc = a[3][Math.floor(rnd() * a[3].length)];
+    if (desc === 'Sales invoice' || desc === 'Customer receipt') desc += ' - ' + custs[Math.floor(rnd() * custs.length)];
+    const v = amt(900, 42000);
+    gl.push({ je: 'JE-' + je, date: days[Math.min(days.length - 1, Math.floor(i * (days.length - 8) / N))], acct: a[0] + ' ' + a[1], desc, dr: a[2] === 'debit' ? v : null, cr: a[2] === 'credit' ? v : null, user: users[Math.floor(rnd() * users.length)] });
+    je++;
+  }
+  const byJe = id => gl.find(g => g.je === id);
+  const set = (id, o) => Object.assign(byJe(id), o);
+  set('JE-1015', { acct: '5000 Cost of sales', desc: 'Purchase of components - Batam supplier', dr: 1846210.37, cr: null });
+  set('JE-1045', { date: '2025-11-15', acct: '6500 Travel', desc: 'Petty cash reimbursement', dr: 1240.55, cr: null });
+  set('JE-1050', { acct: '6400 Professional fees', desc: 'Suspense account clearing', dr: 7415.20, cr: null });
+  set('JE-1060', { acct: '6400 Professional fees', desc: 'Consultancy fee - Director Tan K.L.', dr: 60000, cr: null, user: 'chen.j' });
+  set('JE-1070', { desc: '' });
+  set('JE-1088', { date: '2026-02-08', acct: '2100 Accruals', desc: 'Manual adjustment - bonus accrual', dr: null, cr: 38000, user: 'finance.mgr' });
+  set('JE-1095', { acct: '1500 Other receivables', desc: 'Loan to shareholder - Lim Holdings', dr: 300000, cr: null, user: 'finance.mgr' });
+  set('JE-1102', { date: '2026-03-31', acct: '1300 Inventory', desc: 'Adjustment per CFO - stock valuation', dr: 250000, cr: null, user: 'finance.mgr' });
+  set('JE-1110', { date: null });
+  // year-end and post-period entries
+  gl.splice(gl.length - 4, 4,
+    { je: 'JE-1135', date: '2026-06-29', acct: '4000 Revenue', desc: 'Revenue accrual - year end', dr: null, cr: 480000, user: 'finance.mgr' },
+    { je: 'JE-1136', date: '2026-06-30', acct: '4000 Revenue', desc: 'Sales invoice INV-26-0912 - Pacific Marine', dr: null, cr: 212640.20, user: 'siti.r' },
+    { je: 'JE-1137', date: '2026-07-02', acct: '4000 Revenue', desc: 'Sales invoice INV-26-0931 - Jurong Precision', dr: null, cr: 45820.40, user: 'siti.r' },
+    { je: 'JE-1138', date: '2026-07-06', acct: '4000 Revenue', desc: 'Sales invoice INV-26-0935 - Changi Logistics', dr: null, cr: 18904.65, user: 'siti.r' });
+  const dupSrc = byJe('JE-1020'); gl.splice(gl.indexOf(dupSrc) + 1, 0, Object.assign({}, dupSrc));
+  const glRows = [['JE No', 'Posting Date', 'Account', 'Description', 'Debit', 'Credit', 'Posted By']].concat(gl.map(g => [g.je, g.date, g.acct, g.desc, g.dr, g.cr, g.user]));
+
+  // Trade receivables ageing, with title rows above the header
+  const arCust = ['Pacific Marine Pte Ltd', 'Jurong Precision Pte Ltd', 'Tampines Electronics', 'Kallang Engineering', 'Sentosa Hospitality', 'Changi Logistics', 'Bedok Fabricators', 'Woodlands Auto Parts', 'Seletar Aerospace Supplies', 'Queenstown Medical', 'Novena Instruments', 'Punggol Marine Services', 'Yishun Metalworks', 'Clementi Packaging', 'Bukit Batok Plastics', 'Toa Payoh Printing', 'Paya Lebar Trading', 'Raffles Fit-Out'];
+  const ar = arCust.map((c, i) => { const dp = Math.floor(rnd() * 75) - 20; const due = addDays('2026-06-30', -dp); return [c, 'INV-26-' + String(700 + i * 7).padStart(4, '0'), addDays(due, -30), due, Math.max(dp, 0), amt(2500, 88000)]; });
+  ar.push(['Harbour Fabrication Pte Ltd', 'INV-25-0611', '2025-11-02', '2025-12-02', 210, 185400.00]);
+  ar.push(['Delta Shipyard', 'INV-26-0108', '2026-01-27', '2026-02-25', 125, 42310.75]);
+  ar.push(['Orion Retail', 'INV-25-0233', '2025-05-16', '2025-06-15', 380, 9870.00]);
+  ar.push(['Kestrel Logistics', 'CN-26-0041', '2026-06-12', '2026-06-12', 0, -14250.00]);
+  ar.push(['Merlion Holdings (director-related)', 'INV-26-0688', '2026-05-01', '2026-05-31', 30, 96500.00]);
+  ar.push(['Raffles Fit-Out', 'INV-26-0931', '2026-07-02', '2026-08-01', 0, 45820.40]);
+  const arSum = r2(ar.reduce((s, x) => s + x[5], 0));
+  const arRows = [['Merlion Components Pte Ltd'], ['Trade receivables ageing as at 30 June 2026 (SGD)'], [], ['Customer', 'Invoice No', 'Invoice Date', 'Due Date', 'Days Past Due', 'Balance (SGD)']].concat(ar, [['Total', null, null, null, null, r2(arSum + 10000)]]);
+
+  // Inventory listing
+  const items = ['Servo motor 400W', 'Aluminium housing A2', 'PCB controller v3', 'Hydraulic seal kit', 'Stainless fastener pack', 'Linear guide rail 1m', 'Bearing 6204-2RS', 'Copper busbar 30mm', 'Sensor module IR', 'Gearbox 1:20', 'Cable harness 2m', 'Pneumatic valve', 'Coupling 14mm', 'Timing belt T5'];
+  const inv = items.map((d, i) => { const q = Math.floor(rnd() * 900) + 40; const c = r2(4 + rnd() * 160); return ['SKU-' + (1101 + i), d, q, c, r2(c * (1.25 + rnd() * 0.6)), r2(q * c)]; });
+  inv[6][4] = 8.20; inv[6][3] = 12.40; inv[6][2] = 3200; inv[6][5] = r2(3200 * 12.40);
+  inv[11][3] = 185.50; inv[11][4] = 140.00; inv[11][2] = 120; inv[11][5] = r2(120 * 185.50);
+  inv[13][2] = -40; inv[13][5] = r2(-40 * inv[13][3]);
+  const invRows = [['Item Code', 'Description', 'Qty', 'Unit Cost', 'NRV per Unit', 'Total Value']].concat(inv, [['Total', null, inv.reduce((s, x) => s + x[2], 0), null, null, r2(inv.reduce((s, x) => s + x[5], 0))]]);
+
+  // Trial balance (out of balance by 3,420.00)
+  const tb = [['1000', 'Bank - DBS', 1284630.15, null], ['1100', 'Trade receivables', 1180212.40, null], ['1300', 'Inventory', 642310.88, null], ['1500', 'Other receivables', 300000.00, null], ['1600', 'Plant and equipment', 2210400.00, null], ['1650', 'Accumulated depreciation', null, 884160.00], ['2000', 'Trade payables', null, 763205.37], ['2100', 'Accruals', null, 214800.00], ['2500', 'Bank loan', null, 1500000.00], ['3000', 'Share capital', null, 1000000.00], ['3100', 'Retained earnings', null, 1622150.61], ['4000', 'Revenue', null, 9842316.50], ['5000', 'Cost of sales', 6893540.25, null], ['6100', 'Salaries', 1906400.00, null], ['6200', 'Rent', 486000.00, null], ['6300', 'Utilities', 142318.40, null], ['6400', 'Professional fees', 268900.00, null], ['6500', 'Travel', 87340.40, null], ['7000', 'Finance costs', 75000.00, null], ['8000', 'Income tax expense', 266000.00, null]];
+  const tbD = r2(tb.reduce((s, x) => s + (x[2] || 0), 0)), tbC = r2(tb.reduce((s, x) => s + (x[3] || 0), 0));
+  const diff = r2(tbD - tbC); tb[19][2] = r2(tb[19][2] - diff + 3420); // force an out-of-balance of exactly 3,420.00
+  const tbRows = [['Account Code', 'Account Name', 'Debit', 'Credit']].concat(tb, [['Total', null, r2(tb.reduce((s, x) => s + (x[2] || 0), 0)), r2(tb.reduce((s, x) => s + (x[3] || 0), 0))]]);
+
+  return {
+    engagement: { entity: 'Merlion Components Pte Ltd (sample)', periodEnd: '2026-06-30', currency: 'SGD', materiality: 250000, pmPct: 75, trivialPct: 5 },
+    fileName: 'Merlion_FY2026_testing_SAMPLE.xlsx',
+    sheets: [{ name: 'General Ledger', rows: glRows }, { name: 'AR Ageing', rows: arRows }, { name: 'Inventory', rows: invRows }, { name: 'Trial Balance', rows: tbRows }]
+  };
+}
+
+
+/* ===== App: state, views, events ===== */
+const LS_KEY = 'auditTracker.v1';
+const VIEWS = { overview: 'Overview', issues: 'Issues', files: 'Files & testing', standards: 'Standards', engagement: 'Engagement' };
+const STATUSES = ['Open', 'In review', 'Unadjusted', 'Adjusted', 'Cleared'];
+const CLOSED = ['Adjusted', 'Cleared'];
+const RISKS = ['High', 'Medium', 'Low'];
+const PRIS = ['P1', 'P2', 'P3', 'P4'];
+const PRI_LABEL = { P1: 'P1 – Immediate', P2: 'P2 – High', P3: 'P3 – Normal', P4: 'P4 – Low' };
+const MIS_TYPES = ['', 'Factual', 'Judgemental', 'Projected'];
+const MAX_ROWS = 20000;
+
+let S = null, storageOK = true, view = 'overview';
+let filt = { q: '', risk: '', pri: '', cat: '', status: 'active', file: '' }, sortBy = 'rank';
+let openId = null, hl = null, grid = null, expanded = {}, confirmDel = false;
+
+/* ---------- Persistence ---------- */
+function load() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function save() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); if (!storageOK) { storageOK = true; renderBanner(); } }
+  catch (e) { storageOK = false; renderBanner(); }
+}
+function blankState() { return { engagement: { entity: '', periodEnd: '', currency: 'SGD', materiality: 0, pmPct: 75, trivialPct: 5 }, files: [], issues: [], seq: 1, sample: false, disabled: [] }; }
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+/* ---------- Helpers ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const cur = () => S.engagement.currency || 'SGD';
+function money(n, withCur = true) {
+  if (n === null || n === undefined || n === '' || isNaN(n)) return '—';
+  const s = Math.abs(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (withCur ? cur() + ' ' : '') + (n < 0 ? '(' + s + ')' : s);
+}
+function moneyShort(n) {
+  const a = Math.abs(n); let s;
+  if (a >= 1e6) s = (a / 1e6).toFixed(a >= 1e7 ? 1 : 2) + 'm'; else if (a >= 1e4) s = Math.round(a / 1e3) + 'k'; else s = a.toLocaleString('en-SG', { maximumFractionDigits: 0 });
+  return cur() + ' ' + s;
+}
+function niceDate(iso) { if (!iso) return '—'; const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return d + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] + ' ' + y; }
+const M = () => +S.engagement.materiality || 0;
+const PM = () => M() * (+S.engagement.pmPct || 75) / 100;
+const CT = () => M() * (+S.engagement.trivialPct || 5) / 100;
+const fileOf = id => S.files.find(f => f.id === id);
+function sheetOf(fid, sid) { const f = fileOf(fid); return f ? f.sheets.find(s => s.id === sid) : null; }
+function excelRow(sh, r) { return r + (sh.originR || 0) + 1; }
+function cellRef(sh, r, c) { return colName(c + (sh.originC || 0)) + excelRow(sh, r); }
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 3600); }
+const isClosed = i => CLOSED.includes(i.status);
+
+/* ---------- Ingest ---------- */
+function normVal(v) {
+  if (v instanceof Date) { if (isNaN(v)) return null; return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0'); }
+  if (typeof v === 'string') { const t = v.trim(); return t === '' ? null : t; }
+  if (typeof v === 'boolean') return String(v);
+  return v === undefined ? null : v;
+}
+function parseCSV(text) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(f); f = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
+    else f += ch;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.map(r => r.map(v => { const n = num(v); return n !== null && /^[\s(\-$S]*[\d,.]+\)?\s*$/.test(v) ? n : normVal(v); }));
+}
+async function readFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv' || ext === 'txt') return [{ name: file.name.replace(/\.[^.]+$/, ''), rows: parseCSV(await file.text()), originR: 0, originC: 0 }];
+  if (!window.XLSX) throw new Error('The Excel reader could not load. Check your connection, or save the sheet as CSV and upload that.');
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+  return wb.SheetNames.map(n => {
+    const ws = wb.Sheets[n]; let originR = 0, originC = 0;
+    if (ws['!ref']) { const rg = XLSX.utils.decode_range(ws['!ref']); originR = rg.s.r; originC = rg.s.c; }
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true }).map(r => r.map(normVal));
+    return { name: n, rows, originR, originC };
+  });
+}
+function makeFile(name, raws) {
+  const f = { id: uid(), name, uploadedAt: new Date().toISOString(), sheets: [] };
+  raws.forEach(raw => {
+    while (raw.rows.length && !raw.rows[raw.rows.length - 1].some(v => v !== null && v !== '')) raw.rows.pop();
+    if (!raw.rows.length) return;
+    if (raw.rows.length > MAX_ROWS) { raw.rows = raw.rows.slice(0, MAX_ROWS); toast(raw.name + ': only the first ' + MAX_ROWS.toLocaleString() + ' rows were kept.'); }
+    const sh = prepareSheet(raw); sh.id = uid(); f.sheets.push(sh);
+  });
+  return f;
+}
+async function ingest(files) {
+  const list = [...files].filter(f => /\.(xlsx|xlsm|xls|csv|txt)$/i.test(f.name));
+  if (!list.length) { toast('Choose an Excel (.xlsx, .xls) or CSV file.'); return; }
+  if (S.sample) { removeSample(); toast('Sample data removed. Set materiality and period end under Engagement.'); }
+  let n0 = S.issues.length, last = null;
+  for (const file of list) {
+    try {
+      const raws = await readFile(file);
+      const f = makeFile(file.name, raws);
+      if (!f.sheets.length) { toast(file.name + ' has no data.'); continue; }
+      S.files.push(f); f.sheets.forEach(sh => runSheet(f, sh)); last = f;
+    } catch (e) { toast('Could not read ' + file.name + ': ' + e.message); }
+  }
+  save();
+  if (last) {
+    const found = S.issues.length - n0;
+    filt = Object.assign({}, filt, { file: list.length === 1 ? last.id : '', status: 'active' });
+    toast(found + ' issue' + (found === 1 ? '' : 's') + ' found in ' + (list.length === 1 ? last.name : list.length + ' files') + '.');
+    go('issues');
+  }
+}
+function removeSample() {
+  const ids = S.files.filter(f => f.sample).map(f => f.id);
+  S.files = S.files.filter(f => !ids.includes(f.id));
+  S.issues = S.issues.filter(i => !ids.includes(i.fileId));
+  S.engagement = blankState().engagement; S.sample = false; grid = null;
+}
+function loadSample() {
+  const smp = buildSample();
+  S.engagement = smp.engagement;
+  const f = makeFile(smp.fileName, smp.sheets); f.sample = true;
+  S.files.push(f); S.sample = true;
+  f.sheets.forEach(sh => runSheet(f, sh));
+  save();
+}
+
+/* ---------- Testing ---------- */
+function newIssue(f, file, sh, key) {
+  return Object.assign({
+    id: 'ISS-' + String(S.seq++).padStart(3, '0'), key, fileId: file.id, sheetId: sh.id, status: 'Open', notes: '',
+    misType: f.misType || '', adj: f.adj ?? null, auto: true, touched: false, override: false, created: new Date().toISOString()
+  }, f);
+}
+function runSheet(file, sh) {
+  const found = analyse(sh, S.engagement, S.disabled);
+  const keys = new Set();
+  found.forEach(f => {
+    const key = sh.id + '|' + f.test + '|' + f.rows.join(',') + '|' + f.cells.map(c => c.join(':')).join(',') + (f.population ? '|pop' : '');
+    keys.add(key);
+    const ex = S.issues.find(i => i.key === key);
+    if (ex) Object.assign(ex, { amount: f.amount, title: f.title, detail: f.detail, rows: f.rows, cells: f.cells, ssa: f.ssa, sfrs: f.sfrs, boost: f.boost || 0 });
+    else S.issues.push(newIssue(f, file, sh, key));
+  });
+  S.issues = S.issues.filter(i => !(i.auto && i.sheetId === sh.id && !keys.has(i.key) && !i.touched));
+  sh.tested = true; sh.testedAt = new Date().toISOString();
+  rescore();
+}
+function runAll() { S.files.forEach(f => f.sheets.forEach(sh => runSheet(f, sh))); save(); }
+function rescore() {
+  S.issues.forEach(i => { const sc = scoreIssue(i, S.engagement); i.score = sc.score; if (!i.override) { i.risk = sc.risk; i.priority = sc.priority; } });
+}
+function ranked(list) {
+  const pr = p => PRIS.indexOf(p);
+  return [...list].sort((a, b) => (isClosed(a) - isClosed(b)) || (pr(a.priority) - pr(b.priority)) || (b.score - a.score) || (Math.abs(b.amount || 0) - Math.abs(a.amount || 0)));
+}
+function rankMap() { const m = {}; ranked(S.issues).forEach((i, n) => m[i.id] = n + 1); return m; }
+function stats() {
+  const open = S.issues.filter(i => !isClosed(i));
+  const rowsAmt = new Map();
+  open.forEach(i => { if (i.population) return; const k = i.sheetId + '|' + (i.rows[0] ?? i.id); rowsAmt.set(k, Math.max(rowsAmt.get(k) || 0, Math.abs(i.amount || 0))); });
+  const flagged = [...rowsAmt.values()].reduce((s, v) => s + v, 0);
+  const mis = S.issues.filter(i => i.misType && !isClosed(i)).reduce((s, i) => s + Math.abs(i.adj ?? i.amount ?? 0), 0);
+  return { open, flagged, mis, high: open.filter(i => i.risk === 'High').length, p1: open.filter(i => i.priority === 'P1').length };
+}
+
+/* ---------- Routing ---------- */
+function go(v) { if (location.hash !== '#' + v) location.hash = v; else { view = v; render(); } }
+function route() { const h = location.hash.replace('#', ''); view = VIEWS[h] ? h : 'overview'; window.scrollTo(0, 0); render(); }
+
+/* ---------- Render: shell ---------- */
+let rendering = false;
+function render() {
+  if (rendering) { setTimeout(render, 0); return; }
+  rendering = true;
+  try { renderNow(); } finally { rendering = false; }
+}
+function renderNow() {
+  document.querySelectorAll('.nav button').forEach(b => b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false'));
+  const st = stats();
+  document.getElementById('navIssues').textContent = st.open.length;
+  document.getElementById('navFiles').textContent = S.files.length;
+  document.getElementById('viewTitle').textContent = VIEWS[view];
+  const e = S.engagement;
+  document.getElementById('engLine').innerHTML = (e.entity || M() || e.periodEnd)
+    ? esc(e.entity || 'Unnamed engagement') + ' · Period end ' + niceDate(e.periodEnd) + ' · Materiality ' + (M() ? money(M()) : 'not set')
+    : 'No engagement set up yet. <button class="btn ghost" data-go="engagement">Set up engagement</button>';
+  document.getElementById('railEng').innerHTML = e.entity ? '<strong>' + esc(e.entity) + '</strong><span>FYE ' + niceDate(e.periodEnd) + '</span><span>SFRS(I) · SSA</span>' : '<span>SFRS(I) · SSA</span>';
+  renderBanner();
+  const el = document.getElementById('view');
+  el.innerHTML = ({ overview: vOverview, issues: vIssues, files: vFiles, standards: vStandards, engagement: vEngagement })[view]();
+  if (view === 'files' && grid && grid.focus !== undefined) { const tr = document.getElementById('focusRow'); if (tr) setTimeout(() => tr.scrollIntoView({ block: 'center' }), 30); }
+  if (view === 'standards' && hl && hl.scroll) { const ln = document.querySelector('.line.hl'); if (ln) setTimeout(() => ln.scrollIntoView({ block: 'center' }), 30); hl.scroll = false; }
+  renderDrawer();
+}
+function renderBanner() {
+  const b = []; const e = S.engagement;
+  if (!storageOK) b.push('<div class="banner warn"><span>Browser storage is full, so recent changes will not be kept after you close this page. Remove a large file to free space.</span></div>');
+  if (S.sample) b.push('<div class="banner"><span><strong>Sample data.</strong> This is an example engagement with planted issues. Upload your own Excel file to replace it.</span><button class="btn sm" data-act="remove-sample">Remove sample</button></div>');
+  else if (S.files.length && (!M() || !e.periodEnd)) b.push('<div class="banner"><span>Set materiality and the period end to turn on the cut-off, key item and materiality-based risk ranking.</span><button class="btn sm" data-go="engagement">Open engagement</button></div>');
+  document.getElementById('banner').innerHTML = b.join('');
+}
+
+/* ---------- Shared bits ---------- */
+function chips(i) {
+  return '<span class="chip ' + i.risk + '"><span class="dot"></span>' + i.risk + ' risk</span>' +
+    '<span class="chip pri ' + i.priority + '">' + i.priority + '</span>' +
+    '<span class="chip">' + esc(i.category) + '</span>';
+}
+function refBtns(i) {
+  return (i.ssa || []).concat(i.sfrs || []).map(([s, p]) => '<button class="ref" data-act="ref" data-iss="' + i.id + '" data-std="' + esc(s) + '" data-p="' + esc(p) + '">' + esc(s) + ' <span class="p">¶' + esc(p) + '</span></button>').join('');
+}
+function locHtml(i, withBtn = true) {
+  const f = fileOf(i.fileId), sh = f && sheetOf(i.fileId, i.sheetId);
+  if (!f || !sh) return '<div class="loc"><span>Manual issue – no file location</span></div>';
+  let where;
+  if (i.population) where = 'whole population (' + dataRows(sh).filter(x => !x.total).length + ' rows)';
+  else if (i.rows.length > 1) where = 'Rows ' + i.rows.slice(0, 4).map(r => excelRow(sh, r)).join(', ') + (i.rows.length > 4 ? '…' : '');
+  else if (i.rows.length) where = 'Row ' + excelRow(sh, i.rows[0]);
+  else where = 'Sheet level';
+  const cells = (i.cells || []).slice(0, 4).map(([r, c]) => '<span class="cellref">' + cellRef(sh, r, c) + '</span>').join('');
+  return '<div class="loc"><span class="path">' + esc(f.name) + ' › ' + esc(sh.name) + ' › ' + where + '</span>' + cells +
+    (withBtn && !i.population && i.rows.length ? '<button class="btn ghost sm" data-act="locate" data-iss="' + i.id + '">Show in file</button>' : '') + '</div>';
+}
+function issueCard(i, rank) {
+  return '<article class="card issue ' + i.risk + (isClosed(i) ? ' closed' : '') + '" data-act="open" data-iss="' + i.id + '" tabindex="0" aria-label="' + esc(i.title) + '">' +
+    '<div class="rank">#' + rank + '</div>' +
+    '<div class="t">' + esc(i.title) + '</div>' +
+    '<div class="amt">' + (i.population ? '<span class="muted small">Population</span>' : money(i.amount)) + '</div>' +
+    '<div class="meta"><div class="row-wrap">' + chips(i) + '<span class="status">' + esc(i.status) + (i.misType ? ' · ' + i.misType + ' misstatement' : '') + ' · ' + i.id + '</span></div>' +
+    locHtml(i) + '<div class="row-wrap">' + refBtns(i) + '</div></div></article>';
+}
+function opt(v, label, sel) { return '<option value="' + esc(v) + '"' + (String(v) === String(sel) ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+
+/* ---------- View: overview ---------- */
+function vOverview() {
+  const st = stats(), rk = rankMap();
+  if (!S.files.length && !S.issues.length) return emptyStart();
+  const byCat = CATS.map(c => [c, st.open.filter(i => i.category === c).length]).filter(x => x[1]);
+  const maxC = Math.max(1, ...byCat.map(x => x[1]));
+  const byRisk = RISKS.map(r => [r, st.open.filter(i => i.risk === r).length]);
+  const tot = Math.max(1, st.open.length);
+  const scale = Math.max(M() * 1.15, st.mis * 1.08, 1);
+  const pct = v => Math.min(100, v / scale * 100);
+  const top = ranked(st.open).slice(0, 6);
+  const misState = !M() ? 'Set materiality to evaluate' : st.mis >= M() ? 'Exceeds materiality' : st.mis >= PM() ? 'Above performance materiality' : 'Below performance materiality';
+  return '<div class="stack">' +
+    '<div class="grid g-tiles">' +
+      tile('Open issues', st.open.length, S.issues.length - st.open.length + ' closed') +
+      tile('High risk', st.high, 'of ' + st.open.length + ' open', st.high ? 'accent' : '') +
+      tile('P1 priority', st.p1, 'need attention first') +
+      tile('Amount flagged', moneyShort(st.flagged), 'unique rows, open issues') +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<section class="card"><div class="card-h"><h2>Top priorities</h2><button class="btn ghost" data-go="issues">All issues →</button></div>' +
+        (top.length ? '<div class="top5">' + top.map(i => '<button data-act="open" data-iss="' + i.id + '"><span class="chip pri ' + i.priority + '">' + i.priority + '</span><span class="tt">' + esc(i.title) + '<br><span class="muted small">' + esc(i.category) + ' · ' + (i.ssa[0] ? esc(i.ssa[0][0] + ' ¶' + i.ssa[0][1]) : '') + '</span></span><span class="num small">' + (i.population ? '' : money(i.amount, false)) + '</span></button>').join('') + '</div>' : '<p class="muted">No open issues.</p>') +
+      '</section>' +
+      '<div class="stack">' +
+        '<section class="card"><div class="card-h"><h2>Misstatements not yet corrected</h2><span class="muted small">SSA 450 ¶' + '5, 11</span></div>' +
+          '<div class="num" style="font-family:var(--f-display);font-size:28px;font-weight:650">' + money(st.mis) + '</div><div class="muted small">' + misState + '</div>' +
+          (M() ? '<div class="meter" role="img" aria-label="Misstatements ' + money(st.mis) + ' against materiality ' + money(M()) + '"><div class="fill" style="width:' + pct(st.mis) + '%"></div>' +
+            '<div class="mk" style="left:' + pct(CT()) + '%"><span class="b">Trivial ' + moneyShort(CT()) + '</span></div>' +
+            '<div class="mk" style="left:' + pct(PM()) + '%"><span>PM ' + moneyShort(PM()) + '</span></div>' +
+            '<div class="mk" style="left:' + pct(M()) + '%"><span class="b">Materiality ' + moneyShort(M()) + '</span></div></div>' : '') +
+          '<p class="muted small">Counts issues marked as factual, judgemental or projected that are not yet adjusted.</p></section>' +
+        '<section class="card"><div class="card-h"><h2>By risk level</h2></div><div class="bars">' + byRisk.map(([r, n]) => '<div class="bar"><span>' + r + '</span><div class="track"><div class="fill ' + r + '" style="width:' + (n / tot * 100) + '%"></div></div><span class="n">' + n + '</span></div>').join('') + '</div></section>' +
+      '</div>' +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<section class="card"><div class="card-h"><h2>By risk area</h2></div><div class="bars">' + (byCat.length ? byCat.map(([c, n]) => '<div class="bar"><span>' + esc(c) + '</span><div class="track"><div class="fill" style="width:' + (n / maxC * 100) + '%"></div></div><span class="n">' + n + '</span></div>').join('') : '<p class="muted">Nothing open.</p>') + '</div></section>' +
+      '<section class="card"><div class="card-h"><h2>Files tested</h2><button class="btn ghost" data-go="files">Manage →</button></div>' +
+        S.files.map(f => '<div style="padding:8px 0;border-top:1px solid var(--line)"><strong>' + esc(f.name) + '</strong><div class="muted small">' + f.sheets.map(s => esc(s.name) + ' (' + S.issues.filter(i => i.sheetId === s.id && !isClosed(i)).length + ')').join(' · ') + '</div></div>').join('') +
+      '</section>' +
+    '</div></div>';
+}
+function tile(k, v, s, cls = '') { return '<div class="card tile ' + cls + '"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>'; }
+function emptyStart() {
+  return '<div class="card"><div class="drop" data-drop><div class="big">Upload an Excel file to start testing</div><p class="muted">General ledger, trial balance, receivables ageing, inventory or sales listings (.xlsx, .xls or .csv). Each sheet is tested automatically.</p><div class="row-wrap" style="justify-content:center"><button class="btn primary" data-act="upload">Choose files</button><button class="btn" data-act="load-sample">Load sample engagement</button></div></div></div>';
+}
+
+/* ---------- View: issues ---------- */
+function filtered() {
+  const q = filt.q.trim().toLowerCase();
+  return S.issues.filter(i => {
+    if (filt.risk && i.risk !== filt.risk) return false;
+    if (filt.pri && i.priority !== filt.pri) return false;
+    if (filt.cat && i.category !== filt.cat) return false;
+    if (filt.file && i.fileId !== filt.file) return false;
+    if (filt.status === 'active' && isClosed(i)) return false;
+    if (filt.status && filt.status !== 'active' && i.status !== filt.status) return false;
+    if (q) { const hay = [i.id, i.title, i.detail, i.category, i.notes, ...(i.ssa || []).map(x => x.join(' ')), ...(i.sfrs || []).map(x => x.join(' '))].join(' ').toLowerCase(); if (!hay.includes(q)) return false; }
+    return true;
+  });
+}
+function vIssues() {
+  const rk = rankMap();
+  let list = filtered();
+  if (sortBy === 'rank') list = ranked(list);
+  else if (sortBy === 'amount') list.sort((a, b) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0));
+  else if (sortBy === 'newest') list.sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+  else if (sortBy === 'location') list.sort((a, b) => (a.fileId + a.sheetId).localeCompare(b.fileId + b.sheetId) || ((a.rows[0] ?? 0) - (b.rows[0] ?? 0)));
+  const cats = [...new Set(S.issues.map(i => i.category))];
+  return '<div class="toolbar">' +
+    '<input type="search" id="fq" placeholder="Search issues, notes or a reference like SSA 240" value="' + esc(filt.q) + '" aria-label="Search issues">' +
+    '<select id="frisk" aria-label="Risk">' + opt('', 'All risk levels', filt.risk) + RISKS.map(r => opt(r, r + ' risk', filt.risk)).join('') + '</select>' +
+    '<select id="fpri" aria-label="Priority">' + opt('', 'All priorities', filt.pri) + PRIS.map(p => opt(p, PRI_LABEL[p], filt.pri)).join('') + '</select>' +
+    '<select id="fcat" aria-label="Risk area">' + opt('', 'All risk areas', filt.cat) + cats.map(c => opt(c, c, filt.cat)).join('') + '</select>' +
+    '<select id="fstatus" aria-label="Status">' + opt('active', 'Not closed', filt.status) + opt('', 'All statuses', filt.status) + STATUSES.map(s => opt(s, s, filt.status)).join('') + '</select>' +
+    (S.files.length > 1 ? '<select id="ffile" aria-label="File">' + opt('', 'All files', filt.file) + S.files.map(f => opt(f.id, f.name, filt.file)).join('') + '</select>' : '') +
+    '<select id="fsort" aria-label="Sort">' + opt('rank', 'Sort: risk ranking', sortBy) + opt('amount', 'Sort: amount', sortBy) + opt('location', 'Sort: file location', sortBy) + opt('newest', 'Sort: newest', sortBy) + '</select>' +
+    '</div>' +
+    '<div class="row-wrap" style="justify-content:space-between;margin-bottom:12px"><span class="muted">' + list.length + ' of ' + S.issues.length + ' issues' + (filt.file ? ' in ' + esc((fileOf(filt.file) || {}).name || '') : '') + '</span>' +
+    '<span class="row-wrap"><button class="btn sm" data-act="copy-csv">Copy as CSV</button><button class="btn sm" data-act="new-issue">Add issue</button></span></div>' +
+    (list.length ? '<div class="issues">' + list.map(i => issueCard(i, rk[i.id])).join('') + '</div>' : '<div class="card empty">No issues match these filters.</div>');
+}
+
+/* ---------- View: files ---------- */
+function vFiles() {
+  const rk = rankMap();
+  let h = '<div class="stack"><div class="drop" data-drop><div class="big">Drop Excel or CSV files here</div><p class="muted small">Every sheet is read, its columns are detected and the audit tests run straight away. Files stay in this browser only.</p><button class="btn primary" data-act="upload">Choose files</button></div>';
+  S.files.forEach(f => {
+    const fi = S.issues.filter(i => i.fileId === f.id);
+    h += '<section class="card"><div class="card-h"><div><h2>' + esc(f.name) + '</h2><p class="muted small">Uploaded ' + niceDate(f.uploadedAt) + ' · ' + f.sheets.length + ' sheet' + (f.sheets.length === 1 ? '' : 's') + ' · ' + fi.filter(i => !isClosed(i)).length + ' open issues</p></div>' +
+      '<div class="row-wrap"><button class="btn sm" data-act="run-file" data-file="' + f.id + '">Re-run tests</button><button class="btn sm" data-act="file-issues" data-file="' + f.id + '">View issues</button><button class="btn ghost sm danger" data-act="remove-file" data-file="' + f.id + '">Remove</button></div></div>';
+    f.sheets.forEach(sh => {
+      const n = fi.filter(i => i.sheetId === sh.id && !isClosed(i)).length, dr = dataRows(sh).filter(x => !x.total).length;
+      const ex = expanded[sh.id];
+      h += '<div class="sheet-row"><div><strong>' + esc(sh.name) + '</strong><div class="muted small">' + dr.toLocaleString() + ' data rows · header on row ' + excelRow(sh, sh.headerRow) + '</div></div>' +
+        '<label class="field"><span class="small">Sheet type</span><select data-ch="type" data-file="' + f.id + '" data-sheet="' + sh.id + '">' + Object.entries(SHEET_TYPES).map(([k, v]) => opt(k, v, sh.type)).join('') + '</select></label>' +
+        '<label class="field"><span class="small">Header row</span><input type="number" min="1" value="' + excelRow(sh, sh.headerRow) + '" data-ch="header" data-file="' + f.id + '" data-sheet="' + sh.id + '"></label>' +
+        '<div><div class="muted small">Open issues</div><strong class="num">' + n + '</strong></div>' +
+        '<div class="row-wrap"><button class="btn sm" data-act="toggle-map" data-sheet="' + sh.id + '" aria-expanded="' + !!ex + '">Columns</button><button class="btn sm' + (grid && grid.sheetId === sh.id ? ' primary' : '') + '" data-act="view-sheet" data-file="' + f.id + '" data-sheet="' + sh.id + '">View data</button></div>' +
+        (ex ? mappingHtml(f, sh) : '') + '</div>';
+    });
+    h += '</section>';
+  });
+  if (grid) h += gridHtml(rk);
+  return h + '</div>';
+}
+function mappingHtml(f, sh) {
+  const hdr = sh.rows[sh.headerRow] || [];
+  const width = Math.max(...sh.rows.slice(0, 50).map(r => r.length), hdr.length);
+  const cols = Array.from({ length: width }, (_, c) => [c, colName(c + sh.originC) + ': ' + (str(hdr[c]) || '(blank)')]);
+  return '<div class="mapping"><div class="full small muted" style="grid-column:1/-1">Tell the tests which column holds what. Changes re-run the tests on this sheet.</div>' +
+    MAP_KEYS.map(k => '<label class="field"><span class="small">' + MAP_LABEL[k] + '</span><select data-ch="map" data-key="' + k + '" data-file="' + f.id + '" data-sheet="' + sh.id + '">' + opt('', '— not used —', sh.map[k] ?? '') + cols.map(([c, l]) => opt(c, l, sh.map[k] ?? '')).join('') + '</select></label>').join('') + '</div>';
+}
+function gridHtml(rk) {
+  const f = fileOf(grid.fileId), sh = f && sheetOf(grid.fileId, grid.sheetId);
+  if (!sh) return '';
+  const PAGE = 200, total = sh.rows.length;
+  const start = Math.max(0, Math.min(grid.start || 0, Math.max(0, total - 1)));
+  const end = Math.min(total, start + PAGE);
+  const iss = S.issues.filter(i => i.sheetId === sh.id && !isClosed(i));
+  const cellMap = {}, rowMap = {};
+  iss.forEach(i => { (i.cells || []).forEach(([r, c]) => { (cellMap[r + ':' + c] = cellMap[r + ':' + c] || []).push(i); }); (i.rows || []).forEach(r => { (rowMap[r] = rowMap[r] || []).push(i); }); });
+  const width = Math.min(40, Math.max(1, ...sh.rows.slice(start, end).map(r => r.length), (sh.rows[sh.headerRow] || []).length));
+  let t = '<section class="card" id="gridCard"><div class="card-h"><div><h2>' + esc(sh.name) + '</h2><p class="muted small">' + esc(f.name) + ' · showing Excel rows ' + excelRow(sh, start) + '–' + excelRow(sh, end - 1) + ' of ' + excelRow(sh, total - 1) + '</p></div>' +
+    '<div class="row-wrap"><button class="btn sm" data-act="page" data-d="-1"' + (start === 0 ? ' disabled' : '') + '>Previous 200</button><button class="btn sm" data-act="page" data-d="1"' + (end >= total ? ' disabled' : '') + '>Next 200</button><button class="btn ghost sm" data-act="close-grid">Close</button></div></div>' +
+    '<div class="legend" style="margin-bottom:10px"><span><span class="sw c"></span>Cell behind an issue (click to open)</span><span><span class="sw r"></span>Row with an open issue</span></div>' +
+    '<div class="table-wrap"><table class="grid-t"><thead><tr><th></th>' + Array.from({ length: width }, (_, c) => '<th>' + colName(c + sh.originC) + '</th>').join('') + '</tr></thead><tbody>';
+  for (let r = start; r < end; r++) {
+    const row = sh.rows[r] || [];
+    const cls = [r === sh.headerRow ? 'hdr' : '', rowMap[r] ? 'flag' : '', r === grid.focus ? 'focus' : ''].join(' ').trim();
+    t += '<tr' + (cls ? ' class="' + cls + '"' : '') + (r === grid.focus ? ' id="focusRow"' : '') + '><td class="rn">' + excelRow(sh, r) + '</td>';
+    for (let c = 0; c < width; c++) {
+      const v = row[c]; const hits = cellMap[r + ':' + c];
+      const isN = typeof v === 'number';
+      const disp = v === null || v === undefined ? '' : isN ? v.toLocaleString('en-SG', { maximumFractionDigits: 2 }) : String(v);
+      const title = hits ? hits.map(i => i.id + ' ' + i.title).join('\n') : disp;
+      t += '<td class="' + (isN ? 'n' : '') + (hits ? ' hit' : '') + '"' + (hits ? ' data-act="open" data-iss="' + hits[0].id + '" tabindex="0"' : '') + ' title="' + esc(title) + '">' + esc(disp) + '</td>';
+    }
+    t += '</tr>';
+  }
+  return t + '</tbody></table></div></section>';
+}
+
+/* ---------- View: standards ---------- */
+function refUses() {
+  const u = {};
+  S.issues.forEach(i => (i.ssa || []).concat(i.sfrs || []).forEach(([s, p]) => { const k = s + '|' + p; u[k] = (u[k] || 0) + 1; }));
+  return u;
+}
+function stdCard(code, hlSet, uses, compact) {
+  const s = REFS[code]; if (!s) return '';
+  const anyHl = hlSet && s.lines.some(([p]) => hlSet.has(code + '|' + p));
+  return '<div class="std' + (anyHl ? ' dim' : '') + '"><div class="std-h"><span class="code">' + esc(code) + '</span><span class="muted">' + esc(s.title) + '</span></div>' +
+    (s.note && !compact ? '<div class="note">' + esc(s.note) + '</div>' : '') +
+    s.lines.map(([p, t]) => { const k = code + '|' + p; const n = uses ? uses[k] || 0 : 0;
+      return '<div class="line' + (hlSet && hlSet.has(k) ? ' hl' : '') + '"><span class="para">¶' + esc(p) + '</span><span>' + esc(t) + '</span>' + (uses ? '<span class="uses">' + (n ? '<button class="btn ghost sm" data-act="ref-issues" data-std="' + esc(code) + '" data-p="' + esc(p) + '">' + n + ' issue' + (n === 1 ? '' : 's') + '</button>' : '') + '</span>' : '') + '</div>'; }).join('') + '</div>';
+}
+function vStandards() {
+  const uses = refUses();
+  let hlSet = null, head = '';
+  if (hl) {
+    const i = hl.issue && S.issues.find(x => x.id === hl.issue);
+    hlSet = new Set(hl.refs.map(([s, p]) => s + '|' + p));
+    head = '<div class="banner"><span>Highlighting ' + (i ? 'the references for <strong>' + i.id + '</strong> – ' + esc(i.title) : 'the selected paragraph') + '</span><span class="row-wrap">' + (i ? '<button class="btn sm" data-act="open" data-iss="' + i.id + '">Back to issue</button>' : '') + '<button class="btn sm" data-act="clear-hl">Clear highlight</button></span></div>';
+  }
+  const q = (hl && hl.q) || '';
+  const match = code => { if (!q) return true; const s = REFS[code]; return (code + ' ' + s.title + ' ' + s.lines.map(l => l.join(' ')).join(' ')).toLowerCase().includes(q.toLowerCase()); };
+  const hasHl = k => hlSet && REFS[k].lines.some(([p]) => hlSet.has(k + '|' + p));
+  const col = g => Object.keys(REFS).filter(k => REFS[k].group === g && match(k)).sort((a, b) => hasHl(b) - hasHl(a)).map(k => '<section class="card">' + stdCard(k, hlSet, uses) + '</section>').join('');
+  return head + '<div class="toolbar"><input type="search" id="stdq" placeholder="Search standards, e.g. journal entries, NRV, 90 days" value="' + esc(q) + '" aria-label="Search standards"></div>' +
+    '<p class="muted small" style="margin-bottom:16px;max-width:72ch">Paragraph summaries are paraphrased for quick reference and are not the official text. Always read the full standard: <a href="' + REF_SOURCES.SSA + '" target="_blank" rel="noopener">SSAs on ISCA</a> · <a href="' + REF_SOURCES['SFRS(I)'] + '" target="_blank" rel="noopener">SFRS(I) on ACRA</a>.</p>' +
+    '<div class="lib-cols"><div class="stack"><h2>Singapore Standards on Auditing</h2>' + col('SSA') + '</div><div class="stack"><h2>SFRS(I)</h2>' + col('SFRS(I)') + '</div></div>';
+}
+
+/* ---------- View: engagement ---------- */
+function vEngagement() {
+  const e = S.engagement;
+  return '<div class="stack"><section class="card"><div class="card-h"><h2>Engagement and materiality</h2><span class="muted small">SSA 320 ¶' + '10–11</span></div>' +
+    '<form class="form" id="engForm" onsubmit="return false">' +
+      '<label class="field full"><span>Entity</span><input type="text" id="e_entity" value="' + esc(e.entity) + '" placeholder="e.g. ABC Pte Ltd"></label>' +
+      '<label class="field"><span>Period end</span><input type="date" id="e_periodEnd" value="' + esc(e.periodEnd) + '"></label>' +
+      '<label class="field"><span>Currency</span><input type="text" id="e_currency" value="' + esc(e.currency) + '" maxlength="5"></label>' +
+      '<label class="field"><span>Overall materiality</span><input type="number" id="e_materiality" min="0" step="1000" value="' + esc(e.materiality || '') + '"></label>' +
+      '<label class="field"><span>Performance materiality (% of materiality)</span><input type="number" id="e_pmPct" min="1" max="100" value="' + esc(e.pmPct) + '"></label>' +
+      '<label class="field"><span>Clearly trivial threshold (% of materiality)</span><input type="number" id="e_trivialPct" min="0" max="50" step="0.5" value="' + esc(e.trivialPct) + '"></label>' +
+      '<div class="field"><span>Derived thresholds</span><div class="num" style="color:var(--ink)">PM ' + money(PM()) + '<br>Clearly trivial ' + money(CT()) + '</div></div>' +
+    '</form><p class="muted small" style="margin-top:12px">Changes re-run every test and re-rank all issues. Manual risk and priority overrides are kept.</p></section>' +
+    '<section class="card"><div class="card-h"><h2>Audit tests</h2><span class="muted small">Untick a test to stop it running</span></div>' +
+      Object.entries(TESTS).map(([id, t]) => '<label style="display:grid;grid-template-columns:28px 1fr;gap:8px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer"><input type="checkbox" data-ch="test" data-test="' + id + '"' + (S.disabled.includes(id) ? '' : ' checked') + ' style="width:20px;height:20px;margin-top:3px"><span><strong>' + esc(t.name) + '</strong> <span class="muted small">· ' + esc(t.cat) + ' · ' + (t.types === '*' ? 'all sheets' : t.types.map(x => SHEET_TYPES[x]).join(', ')) + '</span><br><span class="muted small">' + t.ssa.map(a => a[0] + ' ¶' + a[1]).join(', ') + (Array.isArray(t.sfrs) && t.sfrs.length ? ' · ' + t.sfrs.map(a => a[0] + ' ¶' + a[1]).join(', ') : '') + '</span></span></label>').join('') +
+    '</section>' +
+    '<section class="card"><div class="card-h"><h2>Data</h2><span class="muted small">Saved in this browser only</span></div><div class="row-wrap">' +
+      '<button class="btn" data-act="copy-csv">Copy issues as CSV</button><button class="btn" data-act="copy-backup">Copy backup</button><button class="btn" data-act="restore">Restore from backup</button>' +
+      (S.sample ? '' : '<button class="btn" data-act="load-sample">Load sample engagement</button>') +
+      '<button class="btn danger" data-act="clear-all">Clear all data</button></div>' +
+      '<p class="muted small" style="margin-top:12px">Copy as CSV and paste into Excel to share the issue log. A backup holds the files, issues and settings so you can move them to another browser.</p></section></div>';
+}
+
+/* ---------- Drawer ---------- */
+function renderDrawer() {
+  const d = document.getElementById('drawer'), sc = document.getElementById('scrim');
+  const i = openId && S.issues.find(x => x.id === openId);
+  if (!i) { d.classList.add('hidden'); sc.classList.add('hidden'); return; }
+  const rk = rankMap(), t = TESTS[i.test];
+  const f = fileOf(i.fileId), sh = f && sheetOf(i.fileId, i.sheetId);
+  const stds = [...new Set((i.ssa || []).concat(i.sfrs || []).map(x => x[0]))];
+  const hlSet = new Set((i.ssa || []).concat(i.sfrs || []).map(([s, p]) => s + '|' + p));
+  d.innerHTML = '<div class="drawer-h"><div class="stack" style="gap:8px"><span class="muted small">' + i.id + ' · Rank #' + rk[i.id] + ' of ' + S.issues.length + (t ? ' · ' + esc(t.name) : ' · Manual issue') + '</span><h2 id="drawerTitle">' + esc(i.title) + '</h2><div class="row-wrap">' + chips(i) + '<span class="chip">' + esc(i.assertion || '') + '</span></div></div><button class="x" data-act="close" aria-label="Close">×</button></div>' +
+    '<div class="drawer-b">' +
+      '<section class="card"><div class="num" style="font-family:var(--f-display);font-size:30px;font-weight:650">' + (i.population ? 'Population-level finding' : money(i.amount)) + '</div><p style="margin-top:8px">' + esc(i.detail) + '</p></section>' +
+      '<section class="card"><div class="card-h"><h3>Where to find it</h3>' + (sh && !i.population && i.rows.length ? '<button class="btn sm primary" data-act="locate" data-iss="' + i.id + '">Open in file viewer</button>' : '') + '</div>' +
+        (sh ? '<dl class="kv"><dt>File</dt><dd>' + esc(f.name) + '</dd><dt>Sheet</dt><dd>' + esc(sh.name) + ' <span class="muted small">(' + SHEET_TYPES[sh.type] + ')</span></dd><dt>Excel row(s)</dt><dd class="num">' + (i.population ? 'All data rows' : i.rows.map(r => excelRow(sh, r)).join(', ') || '—') + '</dd><dt>Cells</dt><dd class="row-wrap">' + ((i.cells || []).map(([r, c]) => '<span class="cellref">' + cellRef(sh, r, c) + '</span>').join('') || '—') + '</dd></dl>' + snippet(i, sh) : '<p class="muted">This issue was added manually and has no linked file location.</p>') +
+      '</section>' +
+      (t ? '<section class="card"><h3 style="margin-bottom:8px">Suggested audit response</h3><p>' + esc(t.proc) + '</p></section>' : '') +
+      '<section class="card"><div class="card-h"><h3>Standards</h3><button class="btn ghost sm" data-act="ref-all" data-iss="' + i.id + '">Open in library</button></div>' +
+        (stds.length ? '<div class="stack">' + stds.map(code => stdCard(code, hlSet, null, true)).join('') + '</div>' : '<p class="muted">No references linked.</p>') + '</section>' +
+      '<section class="card"><h3 style="margin-bottom:14px">Assessment</h3><div class="form">' +
+        '<label class="field"><span>Status</span><select data-ed="status">' + STATUSES.map(s => opt(s, s, i.status)).join('') + '</select></label>' +
+        '<label class="field"><span>Risk level</span><select data-ed="risk">' + RISKS.map(s => opt(s, s, i.risk)).join('') + '</select></label>' +
+        '<label class="field"><span>Priority</span><select data-ed="priority">' + PRIS.map(s => opt(s, PRI_LABEL[s], i.priority)).join('') + '</select></label>' +
+        '<label class="field"><span>Risk area</span><select data-ed="category">' + CATS.map(s => opt(s, s, i.category)).join('') + '</select></label>' +
+        '<label class="field"><span>Misstatement type (SSA 450)</span><select data-ed="misType">' + MIS_TYPES.map(s => opt(s, s || 'Not a misstatement yet', i.misType)).join('') + '</select></label>' +
+        '<label class="field"><span>Proposed adjustment</span><input type="number" step="0.01" data-ed="adj" value="' + (i.adj ?? '') + '"></label>' +
+        '<label class="field full"><span>Work done and conclusion</span><textarea data-ed="notes" placeholder="Evidence inspected, explanation obtained, conclusion">' + esc(i.notes) + '</textarea></label>' +
+      '</div><div class="row-wrap" style="justify-content:space-between;margin-top:14px"><span class="muted small">' + (i.override ? 'Risk and priority set manually. <button class="btn ghost sm" data-act="reset-risk">Use calculated (' + scoreIssue(i, S.engagement).risk + ', ' + scoreIssue(i, S.engagement).priority + ')</button>' : 'Risk score ' + i.score + '/100, calculated from amount against materiality and the nature of the test.') + '</span>' +
+        (confirmDel ? '<span class="row-wrap"><span class="small">Delete this issue?</span><button class="btn sm danger" data-act="delete">Delete</button><button class="btn sm" data-act="cancel-del">Keep</button></span>' : '<button class="btn ghost sm danger" data-act="ask-del">Delete issue</button>') + '</div></section>' +
+    '</div>';
+  d.classList.remove('hidden'); sc.classList.remove('hidden');
+}
+function snippet(i, sh) {
+  if (i.population || !i.rows.length) return '';
+  const rows = [...new Set(i.rows)].slice(0, 6);
+  const show = new Set([sh.headerRow]);
+  rows.forEach(r => { for (let k = r - 1; k <= r + 1; k++) if (k >= 0 && k < sh.rows.length) show.add(k); });
+  const list = [...show].sort((a, b) => a - b);
+  const hits = new Set((i.cells || []).map(c => c.join(':'))), rset = new Set(rows);
+  const width = Math.min(14, Math.max(...list.map(r => (sh.rows[r] || []).length)));
+  let t = '<div class="table-wrap" style="margin-top:14px;max-height:none"><table class="grid-t"><thead><tr><th></th>' + Array.from({ length: width }, (_, c) => '<th>' + colName(c + sh.originC) + '</th>').join('') + '</tr></thead><tbody>';
+  let prev = null;
+  list.forEach(r => {
+    if (prev !== null && r > prev + 1) t += '<tr><td class="rn">⋮</td><td colspan="' + width + '"></td></tr>';
+    const row = sh.rows[r] || [];
+    t += '<tr class="' + (r === sh.headerRow ? 'hdr' : '') + (rset.has(r) ? ' flag' : '') + '"><td class="rn">' + excelRow(sh, r) + '</td>' + Array.from({ length: width }, (_, c) => { const v = row[c]; const n = typeof v === 'number'; return '<td class="' + (n ? 'n' : '') + (hits.has(r + ':' + c) ? ' hit' : '') + '">' + esc(v === null || v === undefined ? '' : n ? v.toLocaleString('en-SG', { maximumFractionDigits: 2 }) : v) + '</td>'; }).join('') + '</tr>';
+    prev = r;
+  });
+  return t + '</tbody></table></div>';
+}
+function openIssue(id) { openId = id; confirmDel = false; renderDrawer(); const x = document.querySelector('#drawer .x'); if (x) x.focus(); }
+function closeDrawer() { const was = openId; openId = null; confirmDel = false; renderDrawer(); const c = was && document.querySelector('[data-iss="' + was + '"].issue'); if (c) c.focus(); }
+
+/* ---------- Modals ---------- */
+function modal(html) { const m = document.getElementById('modal'); m.innerHTML = '<div class="scrim" data-act="close-modal"></div><div class="card" role="dialog" aria-modal="true" style="position:relative;z-index:1">' + html + '</div>'; m.classList.remove('hidden'); const f = m.querySelector('input,textarea,select,button'); if (f) f.focus(); }
+function closeModal() { const m = document.getElementById('modal'); m.classList.add('hidden'); m.innerHTML = ''; }
+function newIssueModal() {
+  const sheets = []; S.files.forEach(f => f.sheets.forEach(sh => sheets.push([f.id + '|' + sh.id, f.name + ' › ' + sh.name])));
+  const refs = []; Object.entries(REFS).forEach(([code, s]) => s.lines.forEach(([p, t]) => refs.push([code + '|' + p, code + ' ¶' + p + ' – ' + t.slice(0, 70) + (t.length > 70 ? '…' : '')])));
+  modal('<div class="card-h"><h2>Add an issue</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><form class="form" id="niForm">' +
+    '<label class="field full"><span>Title</span><input type="text" id="ni_title" required placeholder="e.g. Unsupported credit note to Delta Shipyard"></label>' +
+    '<label class="field full"><span>Where to find it</span><select id="ni_sheet">' + opt('', 'No file – manual finding', '') + sheets.map(([v, l]) => opt(v, l, '')).join('') + '</select></label>' +
+    '<label class="field"><span>Excel row</span><input type="number" id="ni_row" min="1"></label>' +
+    '<label class="field"><span>Column letter</span><input type="text" id="ni_col" maxlength="3" placeholder="e.g. E"></label>' +
+    '<label class="field"><span>Amount</span><input type="number" id="ni_amount" step="0.01"></label>' +
+    '<label class="field"><span>Risk area</span><select id="ni_cat">' + CATS.map(c => opt(c, c, 'Other')).join('') + '</select></label>' +
+    '<label class="field"><span>Risk level</span><select id="ni_risk">' + RISKS.map(c => opt(c, c, 'Medium')).join('') + '</select></label>' +
+    '<label class="field"><span>Priority</span><select id="ni_pri">' + PRIS.map(c => opt(c, PRI_LABEL[c], 'P3')).join('') + '</select></label>' +
+    '<label class="field full"><span>Assertion</span><input type="text" id="ni_assert" placeholder="e.g. Existence, Cut-off, Valuation"></label>' +
+    '<label class="field full"><span>Standards (hold Ctrl or Cmd to pick several)</span><select id="ni_refs" multiple size="7">' + refs.map(([v, l]) => opt(v, l, '')).join('') + '</select></label>' +
+    '<label class="field full"><span>What you found</span><textarea id="ni_detail"></textarea></label>' +
+    '<div class="full row-wrap" style="justify-content:flex-end"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Add issue</button></div></form>');
+}
+function saveNewIssue() {
+  const v = id => document.getElementById(id).value;
+  const title = v('ni_title').trim(); if (!title) { toast('Give the issue a title.'); return; }
+  let fileId = null, sheetId = null, rows = [], cells = [];
+  if (v('ni_sheet')) {
+    [fileId, sheetId] = v('ni_sheet').split('|'); const sh = sheetOf(fileId, sheetId);
+    const er = parseInt(v('ni_row'), 10);
+    if (er) { const r = er - (sh.originR || 0) - 1; if (r >= 0) { rows = [r]; const L = v('ni_col').trim().toUpperCase(); if (/^[A-Z]{1,3}$/.test(L)) { let c = 0; for (const ch of L) c = c * 26 + ch.charCodeAt(0) - 64; cells = [[r, c - 1 - (sh.originC || 0)]]; } } }
+  }
+  const refs = [...document.getElementById('ni_refs').selectedOptions].map(o => o.value.split('|'));
+  const iss = { id: 'ISS-' + String(S.seq++).padStart(3, '0'), key: 'manual|' + uid(), test: 'manual', fileId, sheetId, rows, cells, amount: parseFloat(v('ni_amount')) || 0,
+    title, detail: v('ni_detail').trim(), category: v('ni_cat'), assertion: v('ni_assert').trim(), ssa: refs.filter(r => REFS[r[0]].group === 'SSA'), sfrs: refs.filter(r => REFS[r[0]].group !== 'SSA'),
+    status: 'Open', notes: '', misType: '', adj: null, auto: false, touched: true, override: true, risk: v('ni_risk'), priority: v('ni_pri'), created: new Date().toISOString() };
+  S.issues.push(iss); rescore(); save(); closeModal(); render(); openIssue(iss.id);
+}
+async function copyText(text, label) {
+  try { await navigator.clipboard.writeText(text); toast(label + ' copied to the clipboard.'); }
+  catch (e) { modal('<div class="card-h"><h2>' + esc(label) + '</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><p class="muted small" style="margin-bottom:10px">Your browser blocked automatic copying. Select all of the text below and copy it.</p><textarea id="copyArea" style="min-height:280px;font-family:var(--f-mono);font-size:13px">' + esc(text) + '</textarea>'); const a = document.getElementById('copyArea'); a.select(); }
+}
+function issuesCSV() {
+  const rk = rankMap();
+  const head = ['Rank', 'ID', 'Title', 'Risk', 'Priority', 'Score', 'Risk area', 'Assertion', 'Status', 'Amount', 'Misstatement type', 'Proposed adjustment', 'File', 'Sheet', 'Excel rows', 'Cells', 'SSA references', 'SFRS(I) references', 'Finding', 'Notes'];
+  const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = ranked(S.issues).map(i => { const f = fileOf(i.fileId), sh = f && sheetOf(i.fileId, i.sheetId);
+    return [rk[i.id], i.id, i.title, i.risk, i.priority, i.score, i.category, i.assertion, i.status, i.population ? '' : (i.amount || 0).toFixed(2), i.misType, i.adj ?? '', f ? f.name : '', sh ? sh.name : '', sh ? i.rows.map(r => excelRow(sh, r)).join(' ') : '', sh ? (i.cells || []).map(([r, c]) => cellRef(sh, r, c)).join(' ') : '', (i.ssa || []).map(x => x[0] + ' para ' + x[1]).join('; '), (i.sfrs || []).map(x => x[0] + ' para ' + x[1]).join('; '), i.detail, i.notes].map(q).join(','); });
+  return [head.join(',')].concat(lines).join('\n');
+}
+
+/* ---------- Events ---------- */
+function bind() {
+  document.addEventListener('click', e => {
+    const goEl = e.target.closest('[data-go]'); if (goEl) { e.preventDefault(); go(goEl.dataset.go); return; }
+    const nav = e.target.closest('.nav button'); if (nav) { go(nav.dataset.view); return; }
+    const el = e.target.closest('[data-act]'); if (!el) return;
+    const a = el.dataset.act, iss = el.dataset.iss;
+    switch (a) {
+      case 'upload': document.getElementById('fileIn').click(); break;
+      case 'open': openIssue(iss); break;
+      case 'close': closeDrawer(); break;
+      case 'locate': { const i = S.issues.find(x => x.id === iss); grid = { fileId: i.fileId, sheetId: i.sheetId, focus: i.rows[0], start: Math.max(0, i.rows[0] - 40) }; openId = null; go('files'); break; }
+      case 'ref': { const i = S.issues.find(x => x.id === iss); hl = { issue: iss, refs: [[el.dataset.std, el.dataset.p]], scroll: true }; openId = null; go('standards'); break; }
+      case 'ref-all': { const i = S.issues.find(x => x.id === iss); hl = { issue: iss, refs: (i.ssa || []).concat(i.sfrs || []), scroll: true }; openId = null; go('standards'); break; }
+      case 'ref-issues': filt = { q: el.dataset.std + ' ' + el.dataset.p, risk: '', pri: '', cat: '', status: '', file: '' }; go('issues'); break;
+      case 'clear-hl': hl = null; render(); break;
+      case 'new-issue': newIssueModal(); break;
+      case 'close-modal': closeModal(); break;
+      case 'view-sheet': grid = { fileId: el.dataset.file, sheetId: el.dataset.sheet, start: 0 }; render(); document.getElementById('gridCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+      case 'close-grid': grid = null; render(); break;
+      case 'page': grid.start = Math.max(0, (grid.start || 0) + (+el.dataset.d) * 200); grid.focus = undefined; render(); document.getElementById('gridCard').scrollIntoView({ block: 'start' }); break;
+      case 'toggle-map': expanded[el.dataset.sheet] = !expanded[el.dataset.sheet]; render(); break;
+      case 'run-file': { const f = fileOf(el.dataset.file); const n0 = S.issues.length; f.sheets.forEach(sh => runSheet(f, sh)); save(); render(); toast('Tests re-run on ' + f.name + '.'); break; }
+      case 'file-issues': filt = { q: '', risk: '', pri: '', cat: '', status: 'active', file: el.dataset.file }; go('issues'); break;
+      case 'remove-file': { const f = fileOf(el.dataset.file); modal('<h2 style="margin-bottom:10px">Remove ' + esc(f.name) + '?</h2><p class="muted">This removes the file and its ' + S.issues.filter(i => i.fileId === f.id).length + ' issues from this browser.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-remove-file" data-file="' + f.id + '">Remove file</button></div>'); break; }
+      case 'do-remove-file': { const id = el.dataset.file; S.files = S.files.filter(f => f.id !== id); S.issues = S.issues.filter(i => i.fileId !== id); if (grid && grid.fileId === id) grid = null; if (!S.files.some(f => f.sample)) S.sample = false; save(); closeModal(); render(); break; }
+      case 'remove-sample': removeSample(); save(); render(); toast('Sample data removed.'); break;
+      case 'load-sample': if (S.sample) break; loadSample(); go('overview'); toast('Sample engagement loaded.'); break;
+      case 'copy-csv': copyText(issuesCSV(), 'Issue log CSV'); break;
+      case 'copy-backup': copyText(JSON.stringify(S), 'Backup'); break;
+      case 'restore': modal('<div class="card-h"><h2>Restore from backup</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><p class="muted small" style="margin-bottom:10px">Paste a backup copied from this app. It replaces everything currently saved.</p><textarea id="restoreArea" style="min-height:200px;font-family:var(--f-mono);font-size:13px"></textarea><div class="row-wrap" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-restore">Restore</button></div>'); break;
+      case 'do-restore': try { const d = JSON.parse(document.getElementById('restoreArea').value); if (!d || !Array.isArray(d.files) || !Array.isArray(d.issues)) throw 0; S = Object.assign(blankState(), d); save(); closeModal(); grid = null; hl = null; go('overview'); toast('Backup restored.'); } catch (x) { toast('That text is not a valid backup from this app.'); } break;
+      case 'clear-all': modal('<h2 style="margin-bottom:10px">Clear all data?</h2><p class="muted">Files, issues, notes and engagement settings will be deleted from this browser. Copy a backup first if you need them.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-clear">Clear everything</button></div>'); break;
+      case 'do-clear': S = blankState(); save(); grid = null; hl = null; openId = null; closeModal(); go('overview'); break;
+      case 'reset-risk': { const i = S.issues.find(x => x.id === openId); i.override = false; rescore(); save(); render(); break; }
+      case 'ask-del': confirmDel = true; renderDrawer(); break;
+      case 'cancel-del': confirmDel = false; renderDrawer(); break;
+      case 'delete': S.issues = S.issues.filter(x => x.id !== openId); openId = null; confirmDel = false; save(); render(); toast('Issue deleted.'); break;
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (!document.getElementById('modal').classList.contains('hidden')) closeModal(); else if (openId) closeDrawer(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.issue, td.hit')) { e.preventDefault(); openIssue(e.target.dataset.iss); }
+  });
+  document.getElementById('scrim').addEventListener('click', closeDrawer);
+  document.addEventListener('submit', e => { if (e.target.id === 'niForm') { e.preventDefault(); saveNewIssue(); } });
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t.id === 'fq') { filt.q = t.value; refreshList(); }
+    else if (t.id === 'stdq') { hl = Object.assign(hl || { refs: [] }, { q: t.value }); const pos = t.selectionStart; render(); const n = document.getElementById('stdq'); n.focus(); n.setSelectionRange(pos, pos); }
+    else if (t.dataset.ed === 'notes') { const i = S.issues.find(x => x.id === openId); i.notes = t.value; i.touched = true; save(); }
+  });
+  document.addEventListener('change', e => {
+    const t = e.target;
+    const fmap = { frisk: 'risk', fpri: 'pri', fcat: 'cat', fstatus: 'status', ffile: 'file' };
+    if (fmap[t.id]) { filt[fmap[t.id]] = t.value; refreshList(); return; }
+    if (t.id === 'fsort') { sortBy = t.value; refreshList(); return; }
+    if (t.id && t.id.startsWith('e_')) {
+      const k = t.id.slice(2); S.engagement[k] = ['materiality', 'pmPct', 'trivialPct'].includes(k) ? (parseFloat(t.value) || 0) : t.value.trim();
+      runAll(); render(); toast('Saved. Tests re-run with the new settings.'); return;
+    }
+    if (t.dataset.ed) {
+      const i = S.issues.find(x => x.id === openId), k = t.dataset.ed;
+      if (k === 'adj') i.adj = t.value === '' ? null : parseFloat(t.value);
+      else if (k !== 'notes') i[k] = t.value;
+      if (k === 'risk' || k === 'priority') i.override = true;
+      i.touched = true; save(); render(); return;
+    }
+    if (t.dataset.ch) {
+      const f = fileOf(t.dataset.file), sh = f && sheetOf(t.dataset.file, t.dataset.sheet);
+      if (t.dataset.ch === 'type') sh.type = t.value;
+      else if (t.dataset.ch === 'header') { const r = (parseInt(t.value, 10) || 1) - (sh.originR || 0) - 1; sh.headerRow = Math.max(0, Math.min(sh.rows.length - 1, r)); sh.map = detectMap(sh.rows[sh.headerRow] || []); }
+      else if (t.dataset.ch === 'map') sh.map[t.dataset.key] = t.value === '' ? null : +t.value;
+      else if (t.dataset.ch === 'test') { const id = t.dataset.test; S.disabled = t.checked ? S.disabled.filter(x => x !== id) : S.disabled.concat(id); runAll(); render(); return; }
+      runSheet(f, sh); save(); render(); toast('Tests re-run on ' + sh.name + '.');
+    }
+  });
+  const fin = document.getElementById('fileIn');
+  fin.addEventListener('change', () => { if (fin.files.length) ingest(fin.files); fin.value = ''; });
+  let depth = 0; const veil = document.getElementById('dropveil');
+  window.addEventListener('dragenter', e => { if ([...(e.dataTransfer.types || [])].includes('Files')) { depth++; veil.classList.remove('hidden'); } });
+  window.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) veil.classList.add('hidden'); });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => { e.preventDefault(); depth = 0; veil.classList.add('hidden'); if (e.dataTransfer.files.length) ingest(e.dataTransfer.files); });
+}
+function refreshList() {
+  if (view !== 'issues') return;
+  const q = document.getElementById('fq'), pos = q ? q.selectionStart : 0, had = document.activeElement && document.activeElement.id;
+  document.getElementById('view').innerHTML = vIssues();
+  const el = had && document.getElementById(had); if (el) { el.focus(); if (had === 'fq') el.setSelectionRange(pos, pos); }
+}
+
+/* ---------- Boot ---------- */
+function boot() {
+  S = load();
+  if (S) S = Object.assign(blankState(), S);
+  else { S = blankState(); loadSample(); }
+  bind();
+  window.addEventListener('hashchange', route);
+  route();
+}
+boot();
+
+</script>
+</body>
+</html>
