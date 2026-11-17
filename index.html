@@ -118,7 +118,7 @@ main{padding:28px clamp(16px,3vw,40px) 64px;min-width:0}
 .toolbar input[type=search]{flex:1 1 220px;min-width:180px}
 .field{display:flex;flex-direction:column;gap:6px;font-size:15px;color:var(--muted)}
 .field>span{font-weight:550}
-input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:16px;color:var(--ink);min-width:0}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=search],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:16px;color:var(--ink);min-width:0}
 textarea{min-height:92px;resize:vertical;width:100%}
 select{padding-right:28px}
 .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
@@ -216,10 +216,43 @@ table.grid-t{border-collapse:separate;border-spacing:0;font-size:15px;min-width:
 }
 @media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
 
+/* Auth, rail additions, users */
+.auth{min-height:100%;display:grid;place-items:center;padding:24px 16px;background:var(--bg)}
+.auth-card{width:min(440px,100%);display:flex;flex-direction:column;gap:16px;padding:32px}
+.auth-card .brand{padding:0}
+.auth-card form .btn.primary{justify-content:center;padding:12px 16px}
+.auth-card input{width:100%}
+.err{color:var(--hi);font-size:15px;min-height:1.2em;margin:0}
+.loading{position:fixed;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 70%,transparent);z-index:80;font-weight:600;color:var(--muted)}
+.eng-pick select{width:100%}
+.rail{overflow-y:auto}
+.rail-user{display:flex;flex-direction:column;gap:4px;color:var(--ink)}
+.rail-user .btn.ghost{padding:4px 6px;font-size:14px}
+.save{font-size:13px;display:flex;align-items:center;gap:6px}
+.save::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--lo)}
+.save.wait::before{background:var(--med)} .save.bad{color:var(--hi)} .save.bad::before{background:var(--hi)}
+.users{display:flex;flex-direction:column}
+.user-row{display:grid;grid-template-columns:minmax(140px,1.2fr) 90px 200px minmax(130px,1fr) auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.user-row:first-child{border-top:0}
+.user-row.off{opacity:.6}
+@media (max-width:980px){ .user-row{grid-template-columns:1fr 1fr} .user-row>div:last-child{grid-column:1/-1;justify-content:flex-start!important} }
+@media (max-width:760px){ .eng-pick{min-width:180px} .eng-pick .field>span{display:none} }
+.modal .scrim{z-index:0}
+
+@media (max-width:1180px){ .user-row{grid-template-columns:minmax(140px,1fr) 90px 200px} .user-row>div:nth-child(4){display:none} .user-row>div:last-child{grid-column:1/-1;justify-content:flex-start!important} }
+@media (max-width:760px){
+  .user-row{grid-template-columns:1fr auto} .user-row>div:nth-child(3){grid-column:1/-1}
+  .rail .rail-foot{display:flex!important;flex-direction:row;align-items:center;margin:0;padding:0;white-space:nowrap}
+  .rail .rail-foot>span,.rail .save,.rail-user>div:first-child{display:none}
+  .rail-user .row-wrap{flex-wrap:nowrap}
+}
+
 </style>
 </head>
 <body>
-<div class="app">
+<div id="auth" class="auth hidden"></div>
+<div id="loading" class="loading hidden" role="status"><span>Loading…</span></div>
+<div class="app hidden">
   <aside class="rail">
     <div class="brand"><div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span>Audit Test Tracker</span></div>
     <nav class="nav" aria-label="Sections">
@@ -228,8 +261,10 @@ table.grid-t{border-collapse:separate;border-spacing:0;font-size:15px;min-width:
       <button data-view="files">Files <span class="count" id="navFiles"></span></button>
       <button data-view="standards">Standards</button>
       <button data-view="engagement">Engagement</button>
+      <button data-view="users" id="navUsers" class="hidden">Users</button>
     </nav>
-    <div class="rail-foot" id="railEng"></div>
+    <div id="engPick" class="eng-pick"></div>
+    <div class="rail-foot"><div id="saveState" class="save ok"></div><div id="railUser" class="rail-user"></div><span>SFRS(I) · SSA</span></div>
   </aside>
   <main>
     <header class="top">
@@ -247,6 +282,7 @@ table.grid-t{border-collapse:separate;border-spacing:0;font-size:15px;min-width:
 <div id="dropveil" class="dropveil hidden">Drop to test these files</div>
 <input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
 <script>
 /* ===== Audit engine: pure functions (detection, tests, scoring, standards, sample) ===== */
 
@@ -819,9 +855,228 @@ function buildSample() {
 }
 
 
+/* ===== Supabase data layer: auth, load, diff-based sync, realtime ===== */
+const SUPABASE_URL = 'https://aisfafhifqdkqdnodiiu.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2T6hRBb1WSOO95cBLUXd-A_c4WVcyeX';
+const USER_DOMAIN = 'audit-tracker.example'; // usernames map to <username>@audit-tracker.example in auth.users
+const PAGE = 1000;
+
+const safeStore = (() => {
+  const mem = {};
+  return {
+    getItem: k => { try { return window.localStorage.getItem(k); } catch (e) { return mem[k] ?? null; } },
+    setItem: (k, v) => { try { window.localStorage.setItem(k, v); } catch (e) { mem[k] = v; } },
+    removeItem: k => { try { window.localStorage.removeItem(k); } catch (e) { delete mem[k]; } }
+  };
+})();
+function newId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
+}
+const r2 = n => (n === null || n === undefined || n === '' || isNaN(n)) ? null : Math.round(+n * 100) / 100;
+
+const DB = {
+  sb: null, me: null, users: [], engagements: [], snap: null, channel: null,
+  status: 'saved', timer: null, chain: Promise.resolve(), lastError: '',
+
+  init() {
+    if (!window.supabase || !window.supabase.createClient) throw new Error('The Supabase library could not load. Check your internet connection and reload.');
+    this.sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: safeStore, persistSession: true, autoRefreshToken: true, storageKey: 'audit-tracker-auth' } });
+  },
+  err(e) { return (e && (e.message || e.error_description || e.msg)) || String(e); },
+
+  /* ---------- Auth ---------- */
+  emailFor(username) { const u = String(username || '').trim().toLowerCase(); return u.includes('@') ? u : u + '@' + USER_DOMAIN; },
+  async session() { const { data } = await this.sb.auth.getSession(); return data.session; },
+  async signIn(username, password) {
+    const { data, error } = await this.sb.auth.signInWithPassword({ email: this.emailFor(username), password });
+    if (error) {
+      const m = this.err(error);
+      if (/invalid login/i.test(m)) throw new Error('Username or password is incorrect.');
+      if (/banned/i.test(m)) throw new Error('This account has been deactivated. Ask an admin to reactivate it.');
+      throw new Error(m);
+    }
+    return data.session;
+  },
+  async signOut() { this.unsubscribe(); await this.sb.auth.signOut(); this.me = null; this.snap = null; },
+  async loadMe() {
+    const { data: { user } } = await this.sb.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await this.sb.from('audit_users').select('*').eq('id', user.id).maybeSingle();
+    if (error) throw new Error(this.err(error));
+    this.me = data; return data;
+  },
+  async changePassword(current, next) {
+    const { error } = await this.sb.rpc('audit_change_password', { p_current: current, p_new: next });
+    if (error) throw new Error(this.err(error));
+    await this.loadMe();
+  },
+
+  /* ---------- Users (admin) ---------- */
+  async loadUsers() {
+    const { data, error } = await this.sb.from('audit_users').select('*').order('username');
+    if (error) throw new Error(this.err(error));
+    this.users = data || []; return this.users;
+  },
+  async addUser(username, password, displayName, role) {
+    const { error } = await this.sb.rpc('audit_admin_create_user', { p_username: username, p_password: password, p_display_name: displayName, p_role: role });
+    if (error) throw new Error(this.err(error));
+  },
+  async resetPassword(id, password) { const { error } = await this.sb.rpc('audit_admin_reset_password', { p_user_id: id, p_password: password }); if (error) throw new Error(this.err(error)); },
+  async updateUser(id, displayName, role, active) { const { error } = await this.sb.rpc('audit_admin_update_user', { p_user_id: id, p_display_name: displayName, p_role: role, p_active: active }); if (error) throw new Error(this.err(error)); },
+  async deleteUser(id) { const { error } = await this.sb.rpc('audit_admin_delete_user', { p_user_id: id }); if (error) throw new Error(this.err(error)); },
+
+  /* ---------- Engagements ---------- */
+  async listEngagements() {
+    const { data, error } = await this.sb.from('engagements').select('id,entity,period_end,is_sample,updated_at').order('updated_at', { ascending: false });
+    if (error) throw new Error(this.err(error));
+    this.engagements = data || []; return this.engagements;
+  },
+  async createEngagement(fields) {
+    const row = Object.assign({ id: newId(), entity: 'New engagement', currency: 'SGD', materiality: 0, pm_pct: 75, trivial_pct: 5, is_sample: false }, fields || {});
+    const { error } = await this.sb.from('engagements').insert(row);
+    if (error) throw new Error(this.err(error));
+    await this.listEngagements(); return row.id;
+  },
+  async deleteEngagement(id) {
+    const { error } = await this.sb.from('engagements').delete().eq('id', id);
+    if (error) throw new Error(this.err(error));
+    await this.listEngagements();
+  },
+  async all(table, engId, order) {
+    let out = [], from = 0;
+    for (;;) {
+      let q = this.sb.from(table).select('*').eq('engagement_id', engId);
+      if (order) q = q.order(order);
+      const { data, error } = await q.range(from, from + PAGE - 1);
+      if (error) throw new Error(this.err(error));
+      out = out.concat(data || []);
+      if (!data || data.length < PAGE) return out;
+      from += PAGE;
+    }
+  },
+  async loadEngagement(id) {
+    const { data: e, error } = await this.sb.from('engagements').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(this.err(error));
+    if (!e) return null;
+    const [files, sheets, issues] = await Promise.all([this.all('audit_files', id, 'uploaded_at'), this.all('audit_sheets', id, 'position'), this.all('audit_issues', id, 'code')]);
+    const st = {
+      engagementId: e.id, sample: e.is_sample, seq: e.issue_seq, disabled: e.disabled_tests || [],
+      engagement: { entity: e.entity, periodEnd: e.period_end || '', currency: e.currency, materiality: +e.materiality, pmPct: +e.pm_pct, trivialPct: +e.trivial_pct },
+      files: files.map(f => ({ id: f.id, name: f.name, uploadedAt: f.uploaded_at, sheets: sheets.filter(s => s.file_id === f.id).map(rowToSheet) })),
+      issues: issues.map(rowToIssue)
+    };
+    this.snap = this.snapshot(st);
+    safeStore.setItem('audit-tracker-engagement', id);
+    return st;
+  },
+
+  /* ---------- Diff-based sync ---------- */
+  snapshot(st) {
+    const s = { eng: JSON.stringify(engToRow(st)), files: new Map(), sheets: new Map(), issues: new Map() };
+    st.files.forEach(f => { s.files.set(f.id, JSON.stringify(fileToRow(f, st))); f.sheets.forEach((sh, i) => s.sheets.set(sh.id, JSON.stringify(sheetMeta(sh, f, i, st)))); });
+    st.issues.forEach(i => s.issues.set(i.uuid, JSON.stringify(issueToRow(i, st))));
+    return s;
+  },
+  queue() {
+    if (!this.snap) return;
+    this.setStatus('pending');
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => { this.chain = this.chain.then(() => this.sync()).catch(() => {}); }, 450);
+  },
+  flush() { clearTimeout(this.timer); this.chain = this.chain.then(() => this.sync()).catch(() => {}); return this.chain; },
+  setStatus(s, msg) { this.status = s; this.lastError = msg || ''; if (window.onSaveStatus) window.onSaveStatus(s, msg); },
+  async sync() {
+    if (!this.snap || !S || S.engagementId === undefined) return;
+    const snap = this.snap, sb = this.sb, eid = S.engagementId;
+    this.setStatus('saving');
+    try {
+      // engagement settings
+      const er = engToRow(S), ej = JSON.stringify(er);
+      if (ej !== snap.eng) { const { id, ...upd } = er; const { error } = await sb.from('engagements').update(upd).eq('id', eid); if (error) throw error; snap.eng = ej; }
+      // new files and sheets
+      const curFiles = new Map(S.files.map(f => [f.id, f]));
+      const newFiles = S.files.filter(f => !snap.files.has(f.id));
+      if (newFiles.length) { const { error } = await sb.from('audit_files').insert(newFiles.map(f => fileToRow(f, S))); if (error) throw error; newFiles.forEach(f => snap.files.set(f.id, JSON.stringify(fileToRow(f, S)))); }
+      for (const f of S.files) {
+        for (let i = 0; i < f.sheets.length; i++) {
+          const sh = f.sheets[i], meta = sheetMeta(sh, f, i, S), mj = JSON.stringify(meta);
+          if (!snap.sheets.has(sh.id)) { const { error } = await sb.from('audit_sheets').insert(Object.assign({}, meta, { rows: sh.rows })); if (error) throw error; snap.sheets.set(sh.id, mj); }
+          else if (snap.sheets.get(sh.id) !== mj) { const { id, ...upd } = meta; const { error } = await sb.from('audit_sheets').update(upd).eq('id', sh.id); if (error) throw error; snap.sheets.set(sh.id, mj); }
+        }
+      }
+      // issues: deletes, then fresh numbers for new ones, then upserts
+      const cur = new Map(S.issues.map(i => [i.uuid, i]));
+      const gone = [...snap.issues.keys()].filter(k => !cur.has(k));
+      for (let k = 0; k < gone.length; k += 200) { const part = gone.slice(k, k + 200); const { error } = await sb.from('audit_issues').delete().in('id', part); if (error) throw error; part.forEach(id => snap.issues.delete(id)); }
+      const fresh = S.issues.filter(i => !snap.issues.has(i.uuid));
+      if (fresh.length) {
+        const { data: start, error } = await sb.rpc('audit_reserve_issue_codes', { p_engagement: eid, p_count: fresh.length });
+        if (error) throw error;
+        const first = Math.min(...fresh.map(i => parseInt(String(i.id).replace(/\D/g, ''), 10) || 0));
+        if (start && start !== first) { fresh.sort((a, b) => a.id.localeCompare(b.id)).forEach((i, n) => { i.id = 'ISS-' + String(start + n).padStart(3, '0'); }); }
+        S.seq = Math.max(S.seq, (start || 0) + fresh.length);
+      }
+      const changed = S.issues.filter(i => snap.issues.get(i.uuid) !== JSON.stringify(issueToRow(i, S)));
+      for (let k = 0; k < changed.length; k += 400) {
+        const part = changed.slice(k, k + 400).map(i => issueToRow(i, S));
+        const { error } = await sb.from('audit_issues').upsert(part, { onConflict: 'id' });
+        if (error) throw error;
+        part.forEach(r => snap.issues.set(r.id, JSON.stringify(r)));
+      }
+      // removed files (cascade removes their sheets and issues)
+      const goneFiles = [...snap.files.keys()].filter(k => !curFiles.has(k));
+      if (goneFiles.length) {
+        const { error } = await sb.from('audit_files').delete().in('id', goneFiles); if (error) throw error;
+        goneFiles.forEach(id => snap.files.delete(id));
+        [...snap.sheets.keys()].forEach(id => { if (!S.files.some(f => f.sheets.some(s => s.id === id))) snap.sheets.delete(id); });
+      }
+      this.setStatus('saved');
+      if (fresh.length && window.onRemoteChange) window.onRemoteChange();
+    } catch (e) {
+      this.setStatus('error', this.err(e));
+      clearTimeout(this.retry); this.retry = setTimeout(() => this.queue(), 8000);
+    }
+  },
+
+  /* ---------- Realtime ---------- */
+  subscribe(eid, handlers) {
+    this.unsubscribe();
+    const ch = this.sb.channel('eng-' + eid);
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'audit_issues', filter: 'engagement_id=eq.' + eid }, p => handlers.issue(p))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'audit_issues' }, p => handlers.issue(p))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'engagements', filter: 'id=eq.' + eid }, p => handlers.engagement(p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_files', filter: 'engagement_id=eq.' + eid }, p => handlers.file(p))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'audit_files' }, p => handlers.file(p))
+      .subscribe();
+    this.channel = ch;
+  },
+  unsubscribe() { if (this.channel) { try { this.sb.removeChannel(this.channel); } catch (e) {} this.channel = null; } }
+};
+
+/* ---------- Row mappers ---------- */
+function engToRow(st) {
+  const e = st.engagement;
+  return { id: st.engagementId, entity: e.entity || '', period_end: e.periodEnd || null, currency: e.currency || 'SGD', materiality: r2(e.materiality) || 0, pm_pct: +e.pmPct || 75, trivial_pct: +e.trivialPct || 0, disabled_tests: st.disabled || [], is_sample: !!st.sample };
+}
+function fileToRow(f, st) { return { id: f.id, engagement_id: st.engagementId, name: f.name, uploaded_at: f.uploadedAt }; }
+function sheetMeta(sh, f, pos, st) { return { id: sh.id, engagement_id: st.engagementId, file_id: f.id, position: pos, name: sh.name, sheet_type: sh.type, header_row: sh.headerRow, origin_r: sh.originR || 0, origin_c: sh.originC || 0, col_map: sh.map, tested_at: sh.testedAt || null }; }
+function rowToSheet(r) { return { id: r.id, name: r.name, rows: r.rows || [], originR: r.origin_r, originC: r.origin_c, headerRow: r.header_row, map: r.col_map || {}, type: r.sheet_type, tested: !!r.tested_at, testedAt: r.tested_at }; }
+function issueToRow(i, st) {
+  return { id: i.uuid, engagement_id: st.engagementId, file_id: i.fileId || null, sheet_id: i.sheetId || null, code: i.id, dedup_key: i.key, test: i.test, title: i.title, detail: i.detail || '',
+    category: i.category || 'Other', assertion: i.assertion || '', risk: i.risk, priority: i.priority, score: Math.round(i.score || 0), amount: r2(i.amount) || 0, is_population: !!i.population,
+    row_idx: i.rows || [], cells: i.cells || [], ssa_refs: i.ssa || [], sfrs_refs: i.sfrs || [], status: i.status, notes: i.notes || '', mis_type: i.misType || '',
+    proposed_adj: r2(i.adj), boost: i.boost || 0, is_auto: !!i.auto, touched: !!i.touched, risk_override: !!i.override };
+}
+function rowToIssue(r) {
+  return { uuid: r.id, id: r.code, key: r.dedup_key, test: r.test, fileId: r.file_id, sheetId: r.sheet_id, title: r.title, detail: r.detail, category: r.category, assertion: r.assertion,
+    risk: r.risk, priority: r.priority, score: r.score, amount: r.amount === null ? 0 : +r.amount, population: r.is_population, rows: r.row_idx || [], cells: r.cells || [],
+    ssa: r.ssa_refs || [], sfrs: r.sfrs_refs || [], status: r.status, notes: r.notes || '', misType: r.mis_type || '', adj: r.proposed_adj === null || r.proposed_adj === undefined ? null : +r.proposed_adj,
+    boost: r.boost || 0, auto: r.is_auto, touched: r.touched, override: r.risk_override, created: r.created_at, updatedAt: r.updated_at, updatedBy: r.updated_by };
+}
+
 /* ===== App: state, views, events ===== */
-const LS_KEY = 'auditTracker.v1';
-const VIEWS = { overview: 'Overview', issues: 'Issues', files: 'Files & testing', standards: 'Standards', engagement: 'Engagement' };
+const VIEWS = { overview: 'Overview', issues: 'Issues', files: 'Files & testing', standards: 'Standards', engagement: 'Engagement', users: 'Users' };
 const STATUSES = ['Open', 'In review', 'Unadjusted', 'Adjusted', 'Cleared'];
 const CLOSED = ['Adjusted', 'Cleared'];
 const RISKS = ['High', 'Medium', 'Low'];
@@ -830,18 +1085,16 @@ const PRI_LABEL = { P1: 'P1 – Immediate', P2: 'P2 – High', P3: 'P3 – Norma
 const MIS_TYPES = ['', 'Factual', 'Judgemental', 'Projected'];
 const MAX_ROWS = 20000;
 
-let S = null, storageOK = true, view = 'overview';
+let S = null, view = 'overview', booted = false, pendingRender = false;
 let filt = { q: '', risk: '', pri: '', cat: '', status: 'active', file: '' }, sortBy = 'rank';
 let openId = null, hl = null, grid = null, expanded = {}, confirmDel = false;
 
 /* ---------- Persistence ---------- */
-function load() { try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
-function save() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); if (!storageOK) { storageOK = true; renderBanner(); } }
-  catch (e) { storageOK = false; renderBanner(); }
-}
-function blankState() { return { engagement: { entity: '', periodEnd: '', currency: 'SGD', materiality: 0, pmPct: 75, trivialPct: 5 }, files: [], issues: [], seq: 1, sample: false, disabled: [] }; }
-function uid() { return Math.random().toString(36).slice(2, 9); }
+function save() { DB.queue(); }
+function blankState() { return { engagementId: null, engagement: { entity: '', periodEnd: '', currency: 'SGD', materiality: 0, pmPct: 75, trivialPct: 5 }, files: [], issues: [], seq: 1, sample: false, disabled: [] }; }
+function uid() { return newId(); }
+const isAdmin = () => !!(DB.me && DB.me.role === 'admin');
+const userName = id => { const u = (DB.users || []).find(x => x.id === id); return u ? (u.display_name || u.username) : ''; };
 
 /* ---------- Helpers ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -912,7 +1165,10 @@ function makeFile(name, raws) {
 async function ingest(files) {
   const list = [...files].filter(f => /\.(xlsx|xlsm|xls|csv|txt)$/i.test(f.name));
   if (!list.length) { toast('Choose an Excel (.xlsx, .xls) or CSV file.'); return; }
-  if (S.sample) { removeSample(); toast('Sample data removed. Set materiality and period end under Engagement.'); }
+  if (S.sample || !S.engagementId) {
+    try { await DB.flush(); const id = await DB.createEngagement({ entity: list[0].name.replace(/\.[^.]+$/, '') }); await openEngagement(id, false); toast('Created a new engagement for your files. Set materiality and period end under Engagement.'); }
+    catch (e) { toast('Could not create an engagement: ' + e.message); return; }
+  }
   let n0 = S.issues.length, last = null;
   for (const file of list) {
     try {
@@ -930,25 +1186,20 @@ async function ingest(files) {
     go('issues');
   }
 }
-function removeSample() {
-  const ids = S.files.filter(f => f.sample).map(f => f.id);
-  S.files = S.files.filter(f => !ids.includes(f.id));
-  S.issues = S.issues.filter(i => !ids.includes(i.fileId));
-  S.engagement = blankState().engagement; S.sample = false; grid = null;
-}
-function loadSample() {
-  const smp = buildSample();
-  S.engagement = smp.engagement;
-  const f = makeFile(smp.fileName, smp.sheets); f.sample = true;
-  S.files.push(f); S.sample = true;
-  f.sheets.forEach(sh => runSheet(f, sh));
-  save();
+async function loadSample() {
+  const smp = buildSample(), e = smp.engagement;
+  await DB.flush();
+  const id = await DB.createEngagement({ entity: e.entity, period_end: e.periodEnd, currency: e.currency, materiality: e.materiality, pm_pct: e.pmPct, trivial_pct: e.trivialPct, is_sample: true });
+  await openEngagement(id, false);
+  const f = makeFile(smp.fileName, smp.sheets);
+  S.files.push(f); f.sheets.forEach(sh => runSheet(f, sh));
+  save(); await DB.flush();
 }
 
 /* ---------- Testing ---------- */
 function newIssue(f, file, sh, key) {
   return Object.assign({
-    id: 'ISS-' + String(S.seq++).padStart(3, '0'), key, fileId: file.id, sheetId: sh.id, status: 'Open', notes: '',
+    uuid: newId(), id: 'ISS-' + String(S.seq++).padStart(3, '0'), key, fileId: file.id, sheetId: sh.id, status: 'Open', notes: '',
     misType: f.misType || '', adj: f.adj ?? null, auto: true, touched: false, override: false, created: new Date().toISOString()
   }, f);
 }
@@ -986,7 +1237,7 @@ function stats() {
 
 /* ---------- Routing ---------- */
 function go(v) { if (location.hash !== '#' + v) location.hash = v; else { view = v; render(); } }
-function route() { const h = location.hash.replace('#', ''); view = VIEWS[h] ? h : 'overview'; window.scrollTo(0, 0); render(); }
+function route() { if (!S) return; const h = location.hash.replace('#', ''); view = VIEWS[h] ? h : 'overview'; window.scrollTo(0, 0); render(); }
 
 /* ---------- Render: shell ---------- */
 let rendering = false;
@@ -996,7 +1247,10 @@ function render() {
   try { renderNow(); } finally { rendering = false; }
 }
 function renderNow() {
+  if (view === 'users' && !isAdmin()) view = 'overview';
   document.querySelectorAll('.nav button').forEach(b => b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false'));
+  document.getElementById('navUsers').classList.toggle('hidden', !isAdmin());
+  renderRail();
   const st = stats();
   document.getElementById('navIssues').textContent = st.open.length;
   document.getElementById('navFiles').textContent = S.files.length;
@@ -1005,18 +1259,17 @@ function renderNow() {
   document.getElementById('engLine').innerHTML = (e.entity || M() || e.periodEnd)
     ? esc(e.entity || 'Unnamed engagement') + ' · Period end ' + niceDate(e.periodEnd) + ' · Materiality ' + (M() ? money(M()) : 'not set')
     : 'No engagement set up yet. <button class="btn ghost" data-go="engagement">Set up engagement</button>';
-  document.getElementById('railEng').innerHTML = e.entity ? '<strong>' + esc(e.entity) + '</strong><span>FYE ' + niceDate(e.periodEnd) + '</span><span>SFRS(I) · SSA</span>' : '<span>SFRS(I) · SSA</span>';
   renderBanner();
   const el = document.getElementById('view');
-  el.innerHTML = ({ overview: vOverview, issues: vIssues, files: vFiles, standards: vStandards, engagement: vEngagement })[view]();
+  el.innerHTML = ({ overview: vOverview, issues: vIssues, files: vFiles, standards: vStandards, engagement: vEngagement, users: vUsers })[view]();
   if (view === 'files' && grid && grid.focus !== undefined) { const tr = document.getElementById('focusRow'); if (tr) setTimeout(() => tr.scrollIntoView({ block: 'center' }), 30); }
   if (view === 'standards' && hl && hl.scroll) { const ln = document.querySelector('.line.hl'); if (ln) setTimeout(() => ln.scrollIntoView({ block: 'center' }), 30); hl.scroll = false; }
   renderDrawer();
 }
 function renderBanner() {
   const b = []; const e = S.engagement;
-  if (!storageOK) b.push('<div class="banner warn"><span>Browser storage is full, so recent changes will not be kept after you close this page. Remove a large file to free space.</span></div>');
-  if (S.sample) b.push('<div class="banner"><span><strong>Sample data.</strong> This is an example engagement with planted issues. Upload your own Excel file to replace it.</span><button class="btn sm" data-act="remove-sample">Remove sample</button></div>');
+  if (DB.status === 'error') b.push('<div class="banner warn"><span><strong>Changes not saved.</strong> ' + esc(DB.lastError) + ' The app will keep retrying.</span><button class="btn sm" data-act="retry-save">Retry now</button></div>');
+  if (S.sample) b.push('<div class="banner"><span><strong>Sample engagement.</strong> Example data with planted issues, shared with your team. Uploading a file starts a new engagement for it.</span><button class="btn sm" data-act="new-engagement">New engagement</button></div>');
   else if (S.files.length && (!M() || !e.periodEnd)) b.push('<div class="banner"><span>Set materiality and the period end to turn on the cut-off, key item and materiality-based risk ranking.</span><button class="btn sm" data-go="engagement">Open engagement</button></div>');
   document.getElementById('banner').innerHTML = b.join('');
 }
@@ -1241,14 +1494,14 @@ function vEngagement() {
     '<section class="card"><div class="card-h"><h2>Audit tests</h2><span class="muted small">Untick a test to stop it running</span></div>' +
       Object.entries(TESTS).map(([id, t]) => '<label style="display:grid;grid-template-columns:28px 1fr;gap:8px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer"><input type="checkbox" data-ch="test" data-test="' + id + '"' + (S.disabled.includes(id) ? '' : ' checked') + ' style="width:20px;height:20px;margin-top:3px"><span><strong>' + esc(t.name) + '</strong> <span class="muted small">· ' + esc(t.cat) + ' · ' + (t.types === '*' ? 'all sheets' : t.types.map(x => SHEET_TYPES[x]).join(', ')) + '</span><br><span class="muted small">' + t.ssa.map(a => a[0] + ' ¶' + a[1]).join(', ') + (Array.isArray(t.sfrs) && t.sfrs.length ? ' · ' + t.sfrs.map(a => a[0] + ' ¶' + a[1]).join(', ') : '') + '</span></span></label>').join('') +
     '</section>' +
-    '<section class="card"><div class="card-h"><h2>Data</h2><span class="muted small">Saved in this browser only</span></div><div class="row-wrap">' +
-      '<button class="btn" data-act="copy-csv">Copy issues as CSV</button><button class="btn" data-act="copy-backup">Copy backup</button><button class="btn" data-act="restore">Restore from backup</button>' +
-      (S.sample ? '' : '<button class="btn" data-act="load-sample">Load sample engagement</button>') +
-      '<button class="btn danger" data-act="clear-all">Clear all data</button></div>' +
-      '<p class="muted small" style="margin-top:12px">Copy as CSV and paste into Excel to share the issue log. A backup holds the files, issues and settings so you can move them to another browser.</p></section></div>';
+    '<section class="card"><div class="card-h"><h2>Data</h2><span class="muted small">Saved to the shared database</span></div><div class="row-wrap">' +
+      '<button class="btn" data-act="copy-csv">Copy issues as CSV</button><button class="btn" data-act="new-engagement">New engagement</button><button class="btn" data-act="load-sample">Add a sample engagement</button>' +
+      (isAdmin() ? '<button class="btn danger" data-act="delete-engagement">Delete this engagement</button>' : '') + '</div>' +
+      '<p class="muted small" style="margin-top:12px">Everyone signed in sees the same engagements, and changes appear for teammates within a few seconds. Copy as CSV and paste into Excel to share the issue log.' + (isAdmin() ? '' : ' Only admins can delete an engagement.') + '</p></section></div>';
 }
 
 /* ---------- Drawer ---------- */
+function drawerIssue(t) { const d = t.closest('#drawer'); const id = (d && d.dataset.iss) || openId; return S && S.issues.find(x => x.id === id || x.uuid === id); }
 function renderDrawer() {
   const d = document.getElementById('drawer'), sc = document.getElementById('scrim');
   const i = openId && S.issues.find(x => x.id === openId);
@@ -1257,7 +1510,8 @@ function renderDrawer() {
   const f = fileOf(i.fileId), sh = f && sheetOf(i.fileId, i.sheetId);
   const stds = [...new Set((i.ssa || []).concat(i.sfrs || []).map(x => x[0]))];
   const hlSet = new Set((i.ssa || []).concat(i.sfrs || []).map(([s, p]) => s + '|' + p));
-  d.innerHTML = '<div class="drawer-h"><div class="stack" style="gap:8px"><span class="muted small">' + i.id + ' · Rank #' + rk[i.id] + ' of ' + S.issues.length + (t ? ' · ' + esc(t.name) : ' · Manual issue') + '</span><h2 id="drawerTitle">' + esc(i.title) + '</h2><div class="row-wrap">' + chips(i) + '<span class="chip">' + esc(i.assertion || '') + '</span></div></div><button class="x" data-act="close" aria-label="Close">×</button></div>' +
+  d.dataset.iss = i.uuid;
+  d.innerHTML = '<div class="drawer-h"><div class="stack" style="gap:8px"><span class="muted small">' + i.id + ' · Rank #' + rk[i.id] + ' of ' + S.issues.length + (t ? ' · ' + esc(t.name) : ' · Manual issue') + (i.updatedBy && userName(i.updatedBy) ? ' · Last edited by ' + esc(userName(i.updatedBy)) : '') + '</span><h2 id="drawerTitle">' + esc(i.title) + '</h2><div class="row-wrap">' + chips(i) + '<span class="chip">' + esc(i.assertion || '') + '</span></div></div><button class="x" data-act="close" aria-label="Close">×</button></div>' +
     '<div class="drawer-b">' +
       '<section class="card"><div class="num" style="font-family:var(--f-display);font-size:30px;font-weight:650">' + (i.population ? 'Population-level finding' : money(i.amount)) + '</div><p style="margin-top:8px">' + esc(i.detail) + '</p></section>' +
       '<section class="card"><div class="card-h"><h3>Where to find it</h3>' + (sh && !i.population && i.rows.length ? '<button class="btn sm primary" data-act="locate" data-iss="' + i.id + '">Open in file viewer</button>' : '') + '</div>' +
@@ -1330,7 +1584,7 @@ function saveNewIssue() {
     if (er) { const r = er - (sh.originR || 0) - 1; if (r >= 0) { rows = [r]; const L = v('ni_col').trim().toUpperCase(); if (/^[A-Z]{1,3}$/.test(L)) { let c = 0; for (const ch of L) c = c * 26 + ch.charCodeAt(0) - 64; cells = [[r, c - 1 - (sh.originC || 0)]]; } } }
   }
   const refs = [...document.getElementById('ni_refs').selectedOptions].map(o => o.value.split('|'));
-  const iss = { id: 'ISS-' + String(S.seq++).padStart(3, '0'), key: 'manual|' + uid(), test: 'manual', fileId, sheetId, rows, cells, amount: parseFloat(v('ni_amount')) || 0,
+  const iss = { uuid: newId(), id: 'ISS-' + String(S.seq++).padStart(3, '0'), key: 'manual|' + uid(), test: 'manual', fileId, sheetId, rows, cells, amount: parseFloat(v('ni_amount')) || 0,
     title, detail: v('ni_detail').trim(), category: v('ni_cat'), assertion: v('ni_assert').trim(), ssa: refs.filter(r => REFS[r[0]].group === 'SSA'), sfrs: refs.filter(r => REFS[r[0]].group !== 'SSA'),
     status: 'Open', notes: '', misType: '', adj: null, auto: false, touched: true, override: true, risk: v('ni_risk'), priority: v('ni_pri'), created: new Date().toISOString() };
   S.issues.push(iss); rescore(); save(); closeModal(); render(); openIssue(iss.id);
@@ -1364,7 +1618,7 @@ function bind() {
       case 'ref-all': { const i = S.issues.find(x => x.id === iss); hl = { issue: iss, refs: (i.ssa || []).concat(i.sfrs || []), scroll: true }; openId = null; go('standards'); break; }
       case 'ref-issues': filt = { q: el.dataset.std + ' ' + el.dataset.p, risk: '', pri: '', cat: '', status: '', file: '' }; go('issues'); break;
       case 'clear-hl': hl = null; render(); break;
-      case 'new-issue': newIssueModal(); break;
+      case 'new-issue': if (!S.engagementId) { toast('Create or choose an engagement first.'); break; } newIssueModal(); break;
       case 'close-modal': closeModal(); break;
       case 'view-sheet': grid = { fileId: el.dataset.file, sheetId: el.dataset.sheet, start: 0 }; render(); document.getElementById('gridCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
       case 'close-grid': grid = null; render(); break;
@@ -1372,19 +1626,25 @@ function bind() {
       case 'toggle-map': expanded[el.dataset.sheet] = !expanded[el.dataset.sheet]; render(); break;
       case 'run-file': { const f = fileOf(el.dataset.file); const n0 = S.issues.length; f.sheets.forEach(sh => runSheet(f, sh)); save(); render(); toast('Tests re-run on ' + f.name + '.'); break; }
       case 'file-issues': filt = { q: '', risk: '', pri: '', cat: '', status: 'active', file: el.dataset.file }; go('issues'); break;
-      case 'remove-file': { const f = fileOf(el.dataset.file); modal('<h2 style="margin-bottom:10px">Remove ' + esc(f.name) + '?</h2><p class="muted">This removes the file and its ' + S.issues.filter(i => i.fileId === f.id).length + ' issues from this browser.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-remove-file" data-file="' + f.id + '">Remove file</button></div>'); break; }
-      case 'do-remove-file': { const id = el.dataset.file; S.files = S.files.filter(f => f.id !== id); S.issues = S.issues.filter(i => i.fileId !== id); if (grid && grid.fileId === id) grid = null; if (!S.files.some(f => f.sample)) S.sample = false; save(); closeModal(); render(); break; }
-      case 'remove-sample': removeSample(); save(); render(); toast('Sample data removed.'); break;
-      case 'load-sample': if (S.sample) break; loadSample(); go('overview'); toast('Sample engagement loaded.'); break;
+      case 'remove-file': { const f = fileOf(el.dataset.file); modal('<h2 style="margin-bottom:10px">Remove ' + esc(f.name) + '?</h2><p class="muted">This removes the file and its ' + S.issues.filter(i => i.fileId === f.id).length + ' issues for everyone on the team.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-remove-file" data-file="' + f.id + '">Remove file</button></div>'); break; }
+      case 'do-remove-file': { const id = el.dataset.file; S.files = S.files.filter(f => f.id !== id); S.issues = S.issues.filter(i => i.fileId !== id); if (grid && grid.fileId === id) grid = null; save(); closeModal(); render(); break; }
       case 'copy-csv': copyText(issuesCSV(), 'Issue log CSV'); break;
-      case 'copy-backup': copyText(JSON.stringify(S), 'Backup'); break;
-      case 'restore': modal('<div class="card-h"><h2>Restore from backup</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><p class="muted small" style="margin-bottom:10px">Paste a backup copied from this app. It replaces everything currently saved.</p><textarea id="restoreArea" style="min-height:200px;font-family:var(--f-mono);font-size:13px"></textarea><div class="row-wrap" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-restore">Restore</button></div>'); break;
-      case 'do-restore': try { const d = JSON.parse(document.getElementById('restoreArea').value); if (!d || !Array.isArray(d.files) || !Array.isArray(d.issues)) throw 0; S = Object.assign(blankState(), d); save(); closeModal(); grid = null; hl = null; go('overview'); toast('Backup restored.'); } catch (x) { toast('That text is not a valid backup from this app.'); } break;
-      case 'clear-all': modal('<h2 style="margin-bottom:10px">Clear all data?</h2><p class="muted">Files, issues, notes and engagement settings will be deleted from this browser. Copy a backup first if you need them.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-clear">Clear everything</button></div>'); break;
-      case 'do-clear': S = blankState(); save(); grid = null; hl = null; openId = null; closeModal(); go('overview'); break;
       case 'reset-risk': { const i = S.issues.find(x => x.id === openId); i.override = false; rescore(); save(); render(); break; }
       case 'ask-del': confirmDel = true; renderDrawer(); break;
       case 'cancel-del': confirmDel = false; renderDrawer(); break;
+      case 'retry-save': DB.flush(); break;
+      case 'new-engagement': newEngagement(); break;
+      case 'load-sample': (async () => { try { await loadSample(); go('overview'); toast('Sample engagement added.'); } catch (x) { toast('Could not add the sample: ' + x.message); } })(); break;
+      case 'delete-engagement': modal('<h2 style="margin-bottom:10px">Delete ' + esc(S.engagement.entity || 'this engagement') + '?</h2><p class="muted">This permanently deletes its files, issues and notes for everyone. This cannot be undone.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-delete-engagement">Delete engagement</button></div>'); break;
+      case 'do-delete-engagement': (async () => { try { const id = S.engagementId; DB.unsubscribe(); DB.snap = null; await DB.deleteEngagement(id); closeModal(); const next = DB.engagements[0]; if (next) await openEngagement(next.id); else { S = blankState(); render(); } toast('Engagement deleted.'); } catch (x) { toast(x.message); } })(); break;
+      case 'sign-out': signOut(); break;
+      case 'change-password': passwordModal(); break;
+      case 'add-user': addUserModal(); break;
+      case 'reset-pw': resetPwModal(el.dataset.user); break;
+      case 'edit-user': editUserModal(el.dataset.user); break;
+      case 'del-user': { const u = DB.users.find(x => x.id === el.dataset.user); modal('<h2 style="margin-bottom:10px">Delete ' + esc(u.username) + '?</h2><p class="muted">They will no longer be able to sign in. Issues they edited are kept. To block access but keep the account, deactivate them instead.</p><div class="row-wrap" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="do-del-user" data-user="' + u.id + '">Delete user</button></div>'); break; }
+      case 'do-del-user': adminCall(() => DB.deleteUser(el.dataset.user), 'User deleted.'); break;
+      case 'toggle-active': { const u = DB.users.find(x => x.id === el.dataset.user); adminCall(() => DB.updateUser(u.id, u.display_name, u.role, !u.active), u.active ? u.username + ' deactivated.' : u.username + ' reactivated.'); break; }
       case 'delete': S.issues = S.issues.filter(x => x.id !== openId); openId = null; confirmDel = false; save(); render(); toast('Issue deleted.'); break;
     }
   });
@@ -1393,24 +1653,25 @@ function bind() {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.issue, td.hit')) { e.preventDefault(); openIssue(e.target.dataset.iss); }
   });
   document.getElementById('scrim').addEventListener('click', closeDrawer);
-  document.addEventListener('submit', e => { if (e.target.id === 'niForm') { e.preventDefault(); saveNewIssue(); } });
+  document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender && !document.querySelector('#drawer :focus, #view input:focus, #view textarea:focus, #modal:not(.hidden)')) { pendingRender = false; render(); } }, 0));
   document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'fq') { filt.q = t.value; refreshList(); }
     else if (t.id === 'stdq') { hl = Object.assign(hl || { refs: [] }, { q: t.value }); const pos = t.selectionStart; render(); const n = document.getElementById('stdq'); n.focus(); n.setSelectionRange(pos, pos); }
-    else if (t.dataset.ed === 'notes') { const i = S.issues.find(x => x.id === openId); i.notes = t.value; i.touched = true; save(); }
+    else if (t.dataset.ed === 'notes') { const i = drawerIssue(t); if (!i) return; i.notes = t.value; i.touched = true; save(); }
   });
   document.addEventListener('change', e => {
     const t = e.target;
     const fmap = { frisk: 'risk', fpri: 'pri', fcat: 'cat', fstatus: 'status', ffile: 'file' };
     if (fmap[t.id]) { filt[fmap[t.id]] = t.value; refreshList(); return; }
     if (t.id === 'fsort') { sortBy = t.value; refreshList(); return; }
+    if (t.id === 'engSel') { if (t.value === '__new') newEngagement(); else openEngagement(t.value); return; }
     if (t.id && t.id.startsWith('e_')) {
       const k = t.id.slice(2); S.engagement[k] = ['materiality', 'pmPct', 'trivialPct'].includes(k) ? (parseFloat(t.value) || 0) : t.value.trim();
       runAll(); render(); toast('Saved. Tests re-run with the new settings.'); return;
     }
     if (t.dataset.ed) {
-      const i = S.issues.find(x => x.id === openId), k = t.dataset.ed;
+      const i = drawerIssue(t), k = t.dataset.ed; if (!i) return;
       if (k === 'adj') i.adj = t.value === '' ? null : parseFloat(t.value);
       else if (k !== 'notes') i[k] = t.value;
       if (k === 'risk' || k === 'priority') i.override = true;
@@ -1441,13 +1702,196 @@ function refreshList() {
 }
 
 /* ---------- Boot ---------- */
-function boot() {
-  S = load();
-  if (S) S = Object.assign(blankState(), S);
-  else { S = blankState(); loadSample(); }
-  bind();
-  window.addEventListener('hashchange', route);
-  route();
+/* ---------- Rail: engagement switcher, user, save state ---------- */
+function renderRail() {
+  const sel = document.getElementById('engPick');
+  const opts = DB.engagements.map(e => opt(e.id, (e.entity || 'Untitled') + (e.period_end ? ' · FYE ' + niceDate(e.period_end) : ''), S.engagementId)).join('');
+  sel.innerHTML = '<label class="field"><span class="small">Engagement</span><select id="engSel">' + (S.engagementId ? '' : opt('', 'No engagement yet', '')) + opts + opt('__new', '+ New engagement', '') + '</select></label>';
+  const me = DB.me;
+  document.getElementById('railUser').innerHTML = me ? '<div><strong>' + esc(me.display_name || me.username) + '</strong><span class="muted small"> · ' + (me.role === 'admin' ? 'Admin' : 'Member') + '</span></div><div class="row-wrap"><button class="btn ghost sm" data-act="change-password">Change password</button><button class="btn ghost sm" data-act="sign-out">Sign out</button></div>' : '';
+  renderSaveState();
+}
+function renderSaveState() {
+  const el = document.getElementById('saveState'); if (!el) return;
+  const m = { saved: ['ok', 'All changes saved'], pending: ['wait', 'Saving…'], saving: ['wait', 'Saving…'], error: ['bad', 'Not saved – retrying'] }[DB.status] || ['ok', ''];
+  el.className = 'save ' + m[0]; el.textContent = m[1];
+}
+window.onSaveStatus = (s) => { renderSaveState(); if (s === 'error' || s === 'saved') { const b = document.getElementById('banner'); if (b && S) renderBanner(); } };
+window.onRemoteChange = () => softRender();
+function softRender() { if (document.querySelector('#drawer :focus, #view input:focus, #view textarea:focus, #modal:not(.hidden)')) pendingRender = true; else render(); }
+
+/* ---------- Engagements ---------- */
+async function openEngagement(id, doRender = true) {
+  await DB.flush();
+  showLoading('Loading engagement…');
+  try {
+    const st = await DB.loadEngagement(id);
+    if (!st) { toast('That engagement no longer exists.'); await DB.listEngagements(); if (DB.engagements[0] && DB.engagements[0].id !== id) return openEngagement(DB.engagements[0].id, doRender); S = blankState(); return; }
+    S = Object.assign(blankState(), st);
+    grid = null; hl = null; openId = null; expanded = {}; filt.file = '';
+    DB.subscribe(id, realtimeHandlers);
+  } catch (e) { toast('Could not load the engagement: ' + e.message); }
+  finally { hideLoading(); }
+  if (doRender) render();
+}
+async function newEngagement() {
+  try { const id = await DB.createEngagement({ entity: 'New engagement' }); await openEngagement(id, false); go('engagement'); toast('New engagement created. Give it a name and set materiality.'); }
+  catch (e) { toast('Could not create an engagement: ' + e.message); }
+}
+let reloadTimer = null;
+const realtimeHandlers = {
+  issue(p) {
+    if (!S || !DB.snap) return;
+    if (p.eventType === 'DELETE') {
+      const id = p.old && p.old.id; if (!id || !DB.snap.issues.has(id)) return;
+      DB.snap.issues.delete(id); S.issues = S.issues.filter(i => i.uuid !== id); if (openId && !S.issues.some(i => i.id === openId)) openId = null; softRender(); return;
+    }
+    const row = p.new; if (!row || row.engagement_id !== S.engagementId) return;
+    const inc = rowToIssue(row), j = JSON.stringify(issueToRow(inc, S));
+    if (DB.snap.issues.get(row.id) === j) return; // our own change echoing back
+    const ix = S.issues.findIndex(i => i.uuid === row.id);
+    if (ix >= 0) S.issues[ix] = Object.assign(S.issues[ix], inc); else S.issues.push(inc);
+    DB.snap.issues.set(row.id, j);
+    softRender();
+  },
+  engagement(p) {
+    const row = p.new; if (!row || !S || row.id !== S.engagementId) return;
+    const st = { engagementId: row.id, sample: row.is_sample, disabled: row.disabled_tests || [], engagement: { entity: row.entity, periodEnd: row.period_end || '', currency: row.currency, materiality: +row.materiality, pmPct: +row.pm_pct, trivialPct: +row.trivial_pct } };
+    const j = JSON.stringify(engToRow(st)); if (j === DB.snap.eng) return;
+    Object.assign(S, { sample: st.sample, disabled: st.disabled, engagement: st.engagement }); S.seq = Math.max(S.seq, row.issue_seq || 0);
+    DB.snap.eng = j; softRender();
+  },
+  file(p) {
+    const id = (p.new && p.new.id) || (p.old && p.old.id);
+    if (!S || !DB.snap) return;
+    if (p.eventType === 'INSERT' && DB.snap.files.has(id)) return;
+    if (p.eventType === 'DELETE' && !DB.snap.files.has(id)) return;
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async () => { if (DB.status !== 'saved') return; const keep = view; await openEngagement(S.engagementId, false); view = keep; softRender(); toast('A teammate changed the files in this engagement. Reloaded.'); }, 1500);
+  }
+};
+
+/* ---------- Users view (admins) ---------- */
+function vUsers() {
+  const rows = DB.users.map(u => '<div class="user-row' + (u.active ? '' : ' off') + '">' +
+    '<div><strong>' + esc(u.display_name || u.username) + '</strong>' + (u.id === DB.me.id ? ' <span class="chip">You</span>' : '') + '<div class="muted small mono">' + esc(u.username) + '</div></div>' +
+    '<div><span class="chip' + (u.role === 'admin' ? ' pri P1' : '') + '">' + (u.role === 'admin' ? 'Admin' : 'Member') + '</span></div>' +
+    '<div class="small">' + (!u.active ? '<span class="chip High">Deactivated</span>' : u.must_change_password ? '<span class="chip Medium">Must set new password</span>' : '<span class="chip Low">Active</span>') + '</div>' +
+    '<div class="muted small">Added ' + niceDate(u.created_at) + (u.password_changed_at ? '<br>Password set ' + niceDate(u.password_changed_at) : '') + '</div>' +
+    '<div class="row-wrap" style="justify-content:flex-end"><button class="btn sm" data-act="edit-user" data-user="' + u.id + '">Edit</button><button class="btn sm" data-act="reset-pw" data-user="' + u.id + '">Reset password</button>' +
+      (u.id === DB.me.id ? '' : '<button class="btn sm" data-act="toggle-active" data-user="' + u.id + '">' + (u.active ? 'Deactivate' : 'Reactivate') + '</button><button class="btn ghost sm danger" data-act="del-user" data-user="' + u.id + '">Delete</button>') + '</div></div>').join('');
+  return '<div class="stack"><section class="card"><div class="card-h"><div><h2>Team members</h2><p class="muted small">' + DB.users.length + ' users · passwords are stored by Supabase Auth, never in this app</p></div><button class="btn primary" data-act="add-user">Add user</button></div>' +
+    '<div class="users">' + rows + '</div></section>' +
+    '<section class="card"><h3 style="margin-bottom:8px">How sign-in works</h3><p class="muted small" style="max-width:72ch">Add a user with a username and an initial password, then share both with them. At their first sign-in they must choose a new password of at least 8 characters before they can see any data. Use Reset password if someone forgets theirs. Deactivated users cannot sign in.</p></section></div>';
+}
+async function adminCall(fn, ok) {
+  try { await fn(); closeModal(); await DB.loadUsers(); render(); toast(ok); } catch (e) { const m = document.getElementById('formErr'); if (m) m.textContent = e.message; else toast(e.message); }
+}
+function addUserModal() {
+  modal('<div class="card-h"><h2>Add user</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><form class="form" id="auForm">' +
+    '<label class="field"><span>Username</span><input type="text" id="au_user" required autocomplete="off" pattern="[a-z0-9_.\\-]{2,32}" placeholder="e.g. priya" autocapitalize="none"></label>' +
+    '<label class="field"><span>Display name</span><input type="text" id="au_name" placeholder="e.g. Priya Nair"></label>' +
+    '<label class="field"><span>Initial password</span><input type="text" id="au_pw" required minlength="6" value="password" autocomplete="off"></label>' +
+    '<label class="field"><span>Role</span><select id="au_role">' + opt('member', 'Member – works on engagements', 'member') + opt('admin', 'Admin – also manages users', 'member') + '</select></label>' +
+    '<p class="full muted small">Username: 2 to 32 lowercase letters, numbers, dot, dash or underscore. The user must replace the initial password at first sign-in.</p>' +
+    '<p class="full err" id="formErr" role="alert"></p>' +
+    '<div class="full row-wrap" style="justify-content:flex-end"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Add user</button></div></form>');
+}
+function doAddUser() {
+  const u = document.getElementById('au_user').value.trim().toLowerCase();
+  adminCall(() => DB.addUser(u, document.getElementById('au_pw').value, document.getElementById('au_name').value.trim(), document.getElementById('au_role').value), u + ' added. Share the username and initial password with them.');
+}
+let editing = null;
+function resetPwModal(id) {
+  editing = DB.users.find(x => x.id === id);
+  modal('<div class="card-h"><h2>Reset password for ' + esc(editing.username) + '</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><form class="form" id="rpForm">' +
+    '<label class="field full"><span>New initial password</span><input type="text" id="rp_pw" required minlength="6" value="password" autocomplete="off"></label>' +
+    '<p class="full muted small">' + (editing.id === DB.me.id ? 'This sets your own password directly.' : 'They will be asked to choose their own password at next sign-in.') + '</p><p class="full err" id="formErr" role="alert"></p>' +
+    '<div class="full row-wrap" style="justify-content:flex-end"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Reset password</button></div></form>');
+}
+function doResetPw() { adminCall(() => DB.resetPassword(editing.id, document.getElementById('rp_pw').value), 'Password reset for ' + editing.username + '.'); }
+function editUserModal(id) {
+  editing = DB.users.find(x => x.id === id);
+  const self = editing.id === DB.me.id;
+  modal('<div class="card-h"><h2>Edit ' + esc(editing.username) + '</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div><form class="form" id="euForm">' +
+    '<label class="field"><span>Display name</span><input type="text" id="eu_name" value="' + esc(editing.display_name) + '"></label>' +
+    '<label class="field"><span>Role</span><select id="eu_role"' + (self ? ' disabled' : '') + '>' + opt('member', 'Member', editing.role) + opt('admin', 'Admin', editing.role) + '</select></label>' +
+    (self ? '<p class="full muted small">You cannot change your own role.</p>' : '') + '<p class="full err" id="formErr" role="alert"></p>' +
+    '<div class="full row-wrap" style="justify-content:flex-end"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Save</button></div></form>');
+}
+function doEditUser() { adminCall(() => DB.updateUser(editing.id, document.getElementById('eu_name').value, document.getElementById('eu_role').value, editing.active), 'Saved.'); }
+
+/* ---------- Auth screens ---------- */
+function showLoading(msg) { const l = document.getElementById('loading'); l.querySelector('span').textContent = msg; l.classList.remove('hidden'); }
+function hideLoading() { document.getElementById('loading').classList.add('hidden'); }
+function authScreen(html) {
+  document.querySelector('.app').classList.add('hidden');
+  const a = document.getElementById('auth'); a.innerHTML = '<div class="auth-card card"><div class="brand"><div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span>Audit Test Tracker</span></div>' + html + '</div>';
+  a.classList.remove('hidden'); const f = a.querySelector('input'); if (f) f.focus();
+}
+function showSignIn(msg) {
+  authScreen('<h1>Sign in</h1><p class="muted">Use the username and password your admin gave you.</p><form id="signInForm" class="stack">' +
+    '<label class="field"><span>Username</span><input type="text" id="si_user" autocomplete="username" autocapitalize="none" required></label>' +
+    '<label class="field"><span>Password</span><input type="password" id="si_pw" autocomplete="current-password" required></label>' +
+    '<p class="err" id="authErr" role="alert">' + esc(msg || '') + '</p><button type="submit" class="btn primary" id="siBtn">Sign in</button></form>' +
+    '<p class="muted small">Forgot your password? Ask an admin to reset it.</p>');
+}
+async function doSignIn() {
+  const btn = document.getElementById('siBtn'), err = document.getElementById('authErr');
+  btn.disabled = true; btn.textContent = 'Signing in…'; err.textContent = '';
+  try { await DB.signIn(document.getElementById('si_user').value, document.getElementById('si_pw').value); await afterSignIn(); }
+  catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Sign in'; }
+}
+function showForcePassword() {
+  authScreen('<h1>Choose a new password</h1><p class="muted">Welcome, ' + esc(DB.me.display_name || DB.me.username) + '. Replace your initial password before you continue.</p>' + pwFields() +
+    '<button class="btn ghost sm" data-act="sign-out" style="align-self:flex-start">Sign out</button>');
+}
+function pwFields() {
+  return '<form id="pwForm" class="stack"><label class="field"><span>Current password</span><input type="password" id="pw_cur" autocomplete="current-password" required></label>' +
+    '<label class="field"><span>New password</span><input type="password" id="pw_new" autocomplete="new-password" minlength="8" required></label>' +
+    '<label class="field"><span>Repeat new password</span><input type="password" id="pw_rep" autocomplete="new-password" minlength="8" required></label>' +
+    '<p class="muted small">At least 8 characters, different from the current one.</p><p class="err" id="formErr" role="alert"></p><button type="submit" class="btn primary" id="pwBtn">Save new password</button></form>';
+}
+function passwordModal() { modal('<div class="card-h"><h2>Change password</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div>' + pwFields()); }
+async function doChangePassword() {
+  const err = document.getElementById('formErr'), n = document.getElementById('pw_new').value;
+  if (n !== document.getElementById('pw_rep').value) { err.textContent = 'The new passwords do not match.'; return; }
+  const btn = document.getElementById('pwBtn'); btn.disabled = true;
+  try {
+    const wasForced = DB.me.must_change_password;
+    await DB.changePassword(document.getElementById('pw_cur').value, n);
+    if (wasForced) await afterSignIn(); else { closeModal(); toast('Password changed.'); }
+  } catch (e) { err.textContent = e.message; btn.disabled = false; }
+}
+async function signOut() { await DB.flush(); await DB.signOut(); S = null; closeModal(); openId = null; document.getElementById('drawer').classList.add('hidden'); document.getElementById('scrim').classList.add('hidden'); showSignIn(); }
+async function afterSignIn() {
+  showLoading('Signing in…');
+  try {
+    const me = await DB.loadMe();
+    if (!me) { await DB.signOut(); hideLoading(); return showSignIn('This account is not set up for the Audit Test Tracker.'); }
+    if (!me.active) { await DB.signOut(); hideLoading(); return showSignIn('This account has been deactivated. Ask an admin to reactivate it.'); }
+    if (me.must_change_password) { hideLoading(); return showForcePassword(); }
+    await Promise.all([DB.loadUsers(), DB.listEngagements()]);
+    const au = document.getElementById('auth'); au.classList.add('hidden'); au.innerHTML = ''; document.querySelector('.app').classList.remove('hidden');
+    const last = safeStore.getItem('audit-tracker-engagement');
+    const pick = DB.engagements.find(e => e.id === last) || DB.engagements[0];
+    S = blankState();
+    if (pick) await openEngagement(pick.id, false);
+    hideLoading(); route();
+  } catch (e) { hideLoading(); showSignIn('Could not load your account: ' + e.message); }
+}
+document.addEventListener('submit', e => {
+  const id = e.target.id; if (!['niForm', 'pwForm', 'auForm', 'rpForm', 'euForm', 'signInForm'].includes(id)) return;
+  e.preventDefault();
+  ({ niForm: saveNewIssue, signInForm: doSignIn, pwForm: doChangePassword, auForm: doAddUser, rpForm: doResetPw, euForm: doEditUser })[id]();
+});
+async function boot() {
+  try { DB.init(); } catch (e) { authScreen('<h1>Cannot connect</h1><p class="err">' + esc(e.message) + '</p>'); return; }
+  bind(); window.addEventListener('hashchange', route);
+  DB.sb.auth.onAuthStateChange((evt) => { if (evt === 'SIGNED_OUT' && S) { S = null; showSignIn('You have been signed out.'); } });
+  window.addEventListener('beforeunload', e => { if (DB.status === 'pending' || DB.status === 'saving') { DB.flush(); e.preventDefault(); e.returnValue = ''; } });
+  const sess = await DB.session();
+  if (sess) afterSignIn(); else showSignIn();
 }
 boot();
 
